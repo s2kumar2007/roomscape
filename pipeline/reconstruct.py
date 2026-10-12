@@ -8,7 +8,7 @@ Nerfstudio's COLMAP wrapper uses ONE shared camera model for all images (right f
 Flags change between releases, so we also check `--help` output at runtime and warn on mismatch.
 """
 from __future__ import annotations
-import json, re, shutil, subprocess, time
+import json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
 from utils import PipelineError, get_logger
 
@@ -27,8 +27,15 @@ def preflight() -> None:
 
 def check_flags(cmd: list[str], needed: list[str]) -> None:
     """Warn (not fail) if expected flags are absent from `<cmd> --help`: the CLI may have changed."""
+    resolved = shutil.which(cmd[0])
+    if not resolved:
+        log.warning("Could not find executable for %s", cmd[0])
+        return
+    exec_cmd = cmd
+    if sys.platform == "win32" and resolved.lower().endswith((".bat", ".cmd")):
+        exec_cmd = [os.environ.get("COMSPEC", "cmd.exe"), "/c", resolved] + cmd[1:]
     try:
-        txt = subprocess.run(cmd + ["--help"], capture_output=True, text=True, timeout=120)
+        txt = subprocess.run(exec_cmd + ["--help"], capture_output=True, text=True, timeout=120)
         txt = txt.stdout + txt.stderr
     except Exception as e:  # noqa: BLE001
         log.warning("Could not read help for %s (%s)", " ".join(cmd), e); return
@@ -41,9 +48,15 @@ def run_cmd(cmd: list[str], logfile: Path, fix: str) -> None:
     log.info("$ %s", " ".join(cmd))
     logfile.parent.mkdir(parents=True, exist_ok=True)
     tail: list[str] = []
+    resolved = shutil.which(cmd[0])
+    if not resolved:
+        raise PipelineError(f"Command not found: {cmd[0]}", fix)
+    exec_cmd = cmd
+    if sys.platform == "win32" and resolved.lower().endswith((".bat", ".cmd")):
+        exec_cmd = [os.environ.get("COMSPEC", "cmd.exe"), "/c", resolved] + cmd[1:]
     with open(logfile, "a") as lf:
         try:
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            p = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         except FileNotFoundError as e:
             raise PipelineError(f"Command not found: {cmd[0]}", fix) from e
         assert p.stdout is not None

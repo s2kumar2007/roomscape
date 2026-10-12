@@ -31,7 +31,7 @@ def test_report_written_with_real_values_only(tmp_path):
 def test_failed_stage_gives_failed_report_and_resume_hint(tmp_path, caplog):
     out, v = _prep(tmp_path)
     (out / "splat.ply").unlink()                                   # align_scene cannot run
-    caplog.set_level("ERROR", logger="namma")
+    caplog.set_level("ERROR", logger="roomscape")
     assert main(["--video", str(v), "--out", str(out), "--resume", "--config", str(_cfg(tmp_path))]) == 2
     r = json.loads((out / "report.json").read_text())
     assert r["status"] == "failed" and r["failed_stage"] == "align_scene"

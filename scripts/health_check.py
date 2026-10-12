@@ -31,7 +31,7 @@ def main() -> int:
         t0 = time.time()
         try:
             pg.goto(a.url, wait_until="domcontentloaded", timeout=60000)
-            pg.wait_for_function("window.__nammaReady === true", timeout=a.timeout * 1000)
+            pg.wait_for_function("window.__roomscapeReady === true", timeout=a.timeout * 1000)
         except PWError as e:
             try: err = pg.evaluate("document.getElementById('error')?.textContent || ''")
             except PWError: err = ""   # page never loaded (e.g. connection refused)
@@ -40,9 +40,9 @@ def main() -> int:
         pg.mouse.click(a.width // 2, a.height // 2); pg.keyboard.down("w")
         samples: list[float] = []; end = time.time() + a.seconds
         while time.time() < end:
-            time.sleep(0.5); s = pg.evaluate("window.__nammaStats"); samples.append(float(s["fps"])) if s and s["fps"] > 0 else None
+            time.sleep(0.5); s = pg.evaluate("window.__roomscapeStats"); samples.append(float(s["fps"])) if s and s["fps"] > 0 else None
         pg.keyboard.up("w")
-        stats = pg.evaluate("window.__nammaStats"); pos = pg.evaluate("(() => { const c = window.nammaSpace?.controls; return c ? [c.x, c.z] : null })()")
+        stats = pg.evaluate("window.__roomscapeStats"); pos = pg.evaluate("(() => { const c = window.roomscape?.controls; return c ? [c.x, c.z] : null })()")
         if a.screenshot:
             try: pg.screenshot(path=a.screenshot, timeout=90000)
             except PWError as e: errors_note = f"screenshot failed: {str(e).splitlines()[0]}"; print("[!]", errors_note)

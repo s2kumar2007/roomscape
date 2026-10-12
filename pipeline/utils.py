@@ -11,7 +11,7 @@ class PipelineError(RuntimeError):
         super().__init__(msg)
         self.fix = fix
 
-def get_logger(name: str = "namma") -> logging.Logger:
+def get_logger(name: str = "roomscape") -> logging.Logger:
     log = logging.getLogger(name)
     if not log.handlers:
         h = logging.StreamHandler()

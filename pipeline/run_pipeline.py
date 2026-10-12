@@ -19,7 +19,7 @@ def find_videos(p: Path) -> list[Path]:
     raise PipelineError(f"No video found at {p}", "Pass a video file or a folder containing .mp4/.mov files.")
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Namma Space pipeline")
+    ap = argparse.ArgumentParser(description="Roomscape pipeline")
     ap.add_argument("--video", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--mode", default="fast", choices=["fast", "quality"])

@@ -34,7 +34,7 @@ def _f(v, fmt="{}", none="n/a"):
 
 def render_md(r: dict) -> str:
     fr, rc, al, ex = r["frames"], r["reconstruction"], r["alignment"], r["export"]
-    L = [f"# Namma Space: run report", "", f"**Status:** {r['status']}" + (f" (failed at `{r['failed_stage']}`)" if r["failed_stage"] else "") + f"  |  **Mode:** {r['mode']}",
+    L = [f"# Roomscape: run report", "", f"**Status:** {r['status']}" + (f" (failed at `{r['failed_stage']}`)" if r["failed_stage"] else "") + f"  |  **Mode:** {r['mode']}",
          "", "## Timing", "", "| Stage | Seconds |", "|---|---|"]
     L += [f"| {s} | {v} |" for s, v in r["stage_seconds"].items()]
     L += [f"| **Total (sum of stages)** | **{r['total_stage_seconds']}** |", "",

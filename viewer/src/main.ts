@@ -6,7 +6,7 @@ import { loadScene } from "./loader";
 import { Minimap } from "./minimap";
 import { UI } from "./ui";
 
-declare global { interface Window { nammaSpace?: Record<string, unknown>; __nammaReady?: boolean; __nammaStats?: { fps: number; pixelRatio: number; loadMs: number; gaussians: number } } }
+declare global { interface Window { roomscape?: Record<string, unknown>; __roomscapeReady?: boolean; __roomscapeStats?: { fps: number; pixelRatio: number; loadMs: number; gaussians: number } } }
 
 async function main(): Promise<void> {
   const t0 = performance.now();
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
     } catch (e) { reject(e); }
   });
 
-  // ROUND 2 HOOKS: add POI markers to poiLayer and A* path lines to pathLayer. Both are exposed on window.nammaSpace.
+  // ROUND 2 HOOKS: add POI markers to poiLayer and A* path lines to pathLayer. Both are exposed on window.roomscape.
   const poiLayer = new THREE.Group(); poiLayer.name = "poiLayer"; scene.add(poiLayer);
   const pathLayer = new THREE.Group(); pathLayer.name = "pathLayer"; scene.add(pathLayer);
 
@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   reset = () => controls.reset();
   const minimap = new Minimap(document.getElementById("minimap") as HTMLCanvasElement, col);
   if (meta.scale.approximate) ui.banner("Scale is approximate (no marker detected)");
-  window.nammaSpace = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer };
+  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer };
 
   const onResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
   window.addEventListener("resize", onResize);
@@ -62,12 +62,12 @@ async function main(): Promise<void> {
       if (lowFor >= 2 && ratio > 0.5) { ratio = Math.max(0.5, ratio - 0.25); renderer.setPixelRatio(ratio); renderer.setSize(window.innerWidth, window.innerHeight); lowFor = 0; }
       else if (highFor >= 6 && ratio < maxRatio) { ratio = Math.min(maxRatio, ratio + 0.25); renderer.setPixelRatio(ratio); renderer.setSize(window.innerWidth, window.innerHeight); highFor = 0; }
       ui.fps(fps, ratio / maxRatio);
-      window.__nammaStats = { fps, pixelRatio: ratio, loadMs: window.__nammaStats?.loadMs ?? 0, gaussians: meta.gaussian_count };
+      window.__roomscapeStats = { fps, pixelRatio: ratio, loadMs: window.__roomscapeStats?.loadMs ?? 0, gaussians: meta.gaussian_count };
     }
   });
   const loadMs = performance.now() - t0;
-  window.__nammaStats = { fps: 0, pixelRatio: ratio, loadMs, gaussians: meta.gaussian_count };
-  window.__nammaReady = true; ui.progress(1, "Ready"); ui.done();
+  window.__roomscapeStats = { fps: 0, pixelRatio: ratio, loadMs, gaussians: meta.gaussian_count };
+  window.__roomscapeReady = true; ui.progress(1, "Ready"); ui.done();
 
   window.addEventListener("pagehide", () => {     // free GPU memory
     renderer.setAnimationLoop(null); controls.dispose(); window.removeEventListener("resize", onResize);

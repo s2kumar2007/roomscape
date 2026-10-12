@@ -1,4 +1,4 @@
-# Namma Space - every tunable lives here. Presets override base values.
+# Roomscape - every tunable lives here. Presets override base values.
 frames:
   candidate_fps: 6
   target_count: 300

@@ -1,5 +1,5 @@
 """Orchestration tests using FAKE ns-* executables (no GPU needed). Real COLMAP/training is verified on a GPU machine."""
-import json, os, stat
+import json, os, stat, sys
 import pytest
 from reconstruct import (check_registration, ply_vertex_count, reconstruct, registration_stats, run_cmd)
 from utils import PipelineError, load_config
@@ -27,6 +27,11 @@ def fake_env(tmp_path, monkeypatch):
         b = tmp_path / "bin"; b.mkdir(exist_ok=True)
         for n, body in FAKE.items():
             f = b / n; f.write_text(body.replace("FRAC", str(frac))); f.chmod(f.stat().st_mode | stat.S_IEXEC)
+            if sys.platform == "win32":
+                if body.startswith("#!/usr/bin/env python3"):
+                    (b / f"{n}.cmd").write_text(f'@"{sys.executable}" "{f}" %*\n')
+                else:
+                    (b / f"{n}.cmd").write_text(f'@echo {n}\n')
         monkeypatch.setenv("PATH", str(b) + os.pathsep + os.environ["PATH"])
         out = tmp_path / "out"; (out / "frames").mkdir(parents=True, exist_ok=True)
         for i in range(100): (out / "frames" / f"frame_{i:05d}.jpg").write_bytes(b"x")
@@ -41,7 +46,7 @@ def test_full_stage_with_fakes(fake_env):
 
 def test_low_registration_warns_not_fails(fake_env, caplog):
     out = fake_env(0.5)
-    caplog.set_level("WARNING", logger="namma")
+    caplog.set_level("WARNING", logger="roomscape")
     reconstruct(load_config("pipeline/config.yaml", "fast"), out)
     assert any("registered" in r.message for r in caplog.records)
 
@@ -53,7 +58,8 @@ def test_too_few_registered_raises(fake_env):
 
 def test_failed_subprocess_raises_with_fix(tmp_path):
     with pytest.raises(PipelineError) as e:
-        run_cmd(["sh", "-c", "echo boom; exit 3"], tmp_path / "x.log", "try this")
+        cmd = [sys.executable, "-c", "import sys; print('boom'); sys.exit(3)"]
+        run_cmd(cmd, tmp_path / "x.log", "try this")
     assert "exit 3" in str(e.value) and e.value.fix == "try this"
 
 def test_missing_tool_clear_error(tmp_path, monkeypatch):
