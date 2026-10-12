@@ -1,0 +1,6 @@
+out/
+__pycache__/
+.pytest_cache/
+viewer/node_modules/
+viewer/dist/
+*.ply

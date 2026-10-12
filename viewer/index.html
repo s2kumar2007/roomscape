@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Namma Space: 3D Digital Twin</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d10; color: #e8eaed; font: 14px system-ui, sans-serif; overflow: hidden; touch-action: none; }
+  #app { position: fixed; inset: 0; } canvas { display: block; }
+  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #0b0d10; z-index: 50; transition: opacity .4s; }
+  #loading.done { opacity: 0; pointer-events: none; }
+  #bar { width: min(360px, 70vw); height: 8px; background: #23272e; border-radius: 4px; overflow: hidden; } #fill { height: 100%; width: 0; background: #4da3ff; transition: width .15s; }
+  #status { opacity: .8; } #error { color: #ff8a80; max-width: 80vw; text-align: center; white-space: pre-wrap; }
+  #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,.7); pointer-events: none; z-index: 5; }
+  #minimap { position: fixed; right: 12px; bottom: 12px; width: 180px; height: 180px; border: 1px solid #ffffff55; border-radius: 6px; background: #000a; z-index: 10; }
+  #hud { position: fixed; left: 12px; top: 12px; display: flex; gap: 8px; z-index: 10; }
+  #hud button { background: #000a; color: #fff; border: 1px solid #ffffff55; border-radius: 6px; padding: 6px 10px; cursor: pointer; font: inherit; }
+  #fps { position: fixed; left: 12px; top: 52px; background: #000a; padding: 4px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; display: none; z-index: 10; }
+  #help { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #000d; padding: 18px 24px; border-radius: 10px; display: none; z-index: 20; line-height: 1.7; }
+  #banner { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); background: #5a4300cc; padding: 4px 10px; border-radius: 6px; display: none; z-index: 10; font-size: 12px; }
+  #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #000a; padding: 6px 12px; border-radius: 6px; z-index: 10; }
+  .joy { position: fixed; bottom: 30px; left: 30px; width: 110px; height: 110px; border-radius: 50%; background: #ffffff22; border: 1px solid #fff5; z-index: 12; touch-action: none; }
+  .joy > i { position: absolute; left: 35px; top: 35px; width: 40px; height: 40px; border-radius: 50%; background: #ffffff77; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="crosshair"></div>
+<canvas id="minimap" width="360" height="360"></canvas>
+<div id="hud"><button id="btn-reset" title="Reset to entrance">Reset</button><button id="btn-full" title="Fullscreen">Fullscreen</button><button id="btn-help" title="Controls (H)">?</button></div>
+<div id="fps"></div><div id="banner"></div>
+<div id="hint">Click to look around · WASD move · Shift run · H help</div>
+<div id="help"><b>Controls</b><br>Mouse: look (click to capture, Esc to release)<br>W A S D: move &nbsp; Shift: run<br>H: toggle this help &nbsp; F: FPS counter<br>R: reset to entrance &nbsp; Fullscreen button<br>Touch: left joystick moves, drag right side to look</div>
+<div id="loading"><div>Loading 3D space…</div><div id="bar"><div id="fill"></div></div><div id="status">Starting</div><div id="error"></div></div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

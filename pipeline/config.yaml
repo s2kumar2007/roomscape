@@ -1,0 +1,53 @@
+# Namma Space - every tunable lives here. Presets override base values.
+frames:
+  candidate_fps: 6
+  target_count: 300
+  blur_percentile: 20
+  min_blur_abs: 30.0
+  dup_threshold: 0.015
+  max_side: 1920
+colmap:
+  matcher: sequential       # sequential | exhaustive | vocab_tree
+  single_camera: true
+  min_registration_rate: 0.80
+train:
+  method: splatfacto
+  iterations: 10000
+  eval_split: true
+align:
+  floor_ransac_thresh: 0.02
+  floor_search_fraction: 0.3
+  tag_family: tag36h11
+  tag_size_m: 0.20
+  fallback_camera_height_m: 1.4
+collision:
+  cell_size_m: 0.10
+  agent_radius_m: 0.25
+  blocked_min_h: 0.15
+  blocked_max_h: 1.80
+  min_opacity: 0.3
+  outlier_voxel_m: 0.2        # voxels with fewer points than min_voxel_points are floaters
+  min_voxel_points: 3
+  blocked_min_points: 3       # points in height band needed to mark a cell BLOCKED
+  floor_min_points: 2
+  min_blocked_component_cells: 3
+export:
+  format: splat              # splat (32 B/Gaussian, no SH) | ply (pruned, SH<=1); unknown -> splat
+  min_scale_m: 0.002         # prune Gaussians smaller than this in every axis
+  crop_margin_m: 0.5
+  viewer_scene_dir: null     # default: <repo>/viewer/public/scene
+  sh_degree: 1
+  min_opacity: 0.05
+  max_size_mb: 50
+viewer:
+  eye_height_m: 1.6
+  walk_speed: 1.4
+  run_speed: 3.0
+presets:
+  fast:
+    frames: {target_count: 200}
+    train: {iterations: 7000}
+  quality:
+    frames: {target_count: 500}
+    train: {iterations: 30000}
+    colmap: {matcher: exhaustive}

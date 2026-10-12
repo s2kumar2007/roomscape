@@ -1,0 +1,7 @@
+numpy
+opencv-contrib-python
+pyyaml
+matplotlib
+pytest
+playwright
+# nerfstudio / torch: install per their docs (CUDA-specific); see README
