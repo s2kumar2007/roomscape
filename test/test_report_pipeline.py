@@ -43,6 +43,40 @@ def test_missing_data_is_null_not_invented(tmp_path):
     from report import render_md
     assert "n/a" in render_md(r)
 
+def test_cli_flags_frames_trim_no_gpu(tmp_path):
+    out, v = _prep(tmp_path)
+    cfg_file = _cfg(tmp_path)
+    ret = main([
+        "--video", str(v),
+        "--out", str(out),
+        "--resume",
+        "--config", str(cfg_file),
+        "--frames", "150",
+        "--trim-start", "1.2",
+        "--trim-end", "5.8",
+        "--no-gpu",
+    ])
+    assert ret == 0
+
+def test_colab_notebook_structure():
+    nb_path = Path("notebooks/colab_reconstruct.ipynb")
+    assert nb_path.exists()
+    nb = json.loads(nb_path.read_text())
+    assert "cells" in nb
+    all_code = "\n".join("".join(c["source"]) for c in nb["cells"] if c.get("cell_type") == "code")
+    assert "FRAMES" in all_code
+    assert "TRIM_START" in all_code
+    assert "TRIM_END" in all_code
+    assert "use_gpu" in all_code and "False" in all_code.replace("false", "False")
+    assert "run_pipeline.py" in all_code
+    # Ensure no `if ...: !cmd` one-liners in any cell
+    for c in nb["cells"]:
+        if c.get("cell_type") == "code":
+            for line in c["source"]:
+                stripped = line.strip()
+                if stripped.startswith("if ") and ": !" in stripped:
+                    pytest.fail(f"Invalid IPython one-liner detected: {line}")
+
 SAMPLE = Path("test/sample_video")
 @pytest.mark.skipif(not any(SAMPLE.glob("*.mp4")) and not any(SAMPLE.glob("*.mov")), reason="no real sample video in test/sample_video (needs GPU + Nerfstudio too)")
 def test_full_pipeline_on_real_sample(tmp_path):

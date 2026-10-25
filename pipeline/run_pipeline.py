@@ -26,6 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--format", choices=["splat", "ply"], help="scene export format (default from config)")
     ap.add_argument("--resume", action="store_true", help="skip stages whose .done marker exists")
     ap.add_argument("--config", type=Path, default=Path(__file__).parent / "config.yaml")
+    ap.add_argument("--frames", type=int, help="target frame count (overrides config)")
+    ap.add_argument("--trim-start", type=float, help="trim video before this timestamp in seconds")
+    ap.add_argument("--trim-end", type=float, help="trim video after this timestamp in seconds")
+    ap.add_argument("--no-gpu", action="store_true", help="run COLMAP without GPU")
     a = ap.parse_args(argv)
     log = get_logger()
     t0, current, mode = time.perf_counter(), None, a.mode
@@ -40,6 +44,14 @@ def main(argv: list[str] | None = None) -> int:
         cfg = load_config(a.config, a.mode)
         cfg["_resume"] = a.resume
         cfg["_format"] = a.format
+        if a.frames is not None:
+            cfg["frames"]["target_count"] = a.frames
+        if a.trim_start is not None:
+            cfg["frames"]["trim_start_s"] = a.trim_start
+        if a.trim_end is not None:
+            cfg["frames"]["trim_end_s"] = a.trim_end
+        if a.no_gpu:
+            cfg["colmap"]["use_gpu"] = False
         videos = find_videos(a.video)
         a.out.mkdir(parents=True, exist_ok=True)
         log.info("mode=%s videos=%d out=%s", a.mode, len(videos), a.out)

@@ -130,8 +130,11 @@ def reconstruct(cfg: dict, out: Path) -> dict:
         log.info("Reusing existing COLMAP result in %s", data)
     else:
         check_flags(["ns-process-data", "images"], ["--matching-method", "--output-dir"])
-        run_cmd(["ns-process-data", "images", "--data", str(frames), "--output-dir", str(data),
-                 "--matching-method", c["matcher"]], logs / "colmap.log",
+        colmap_cmd = ["ns-process-data", "images", "--data", str(frames), "--output-dir", str(data),
+                      "--matching-method", c["matcher"]]
+        if not c.get("use_gpu", True):
+            colmap_cmd.append("--no-gpu")
+        run_cmd(colmap_cmd, logs / "colmap.log",
                 "Check COLMAP installs (`colmap -h`). Try matcher=exhaustive in config.yaml, or capture per docs/SOP.md.")
     t_colmap = time.perf_counter() - t0
     reg = registration_stats(data, n_in)

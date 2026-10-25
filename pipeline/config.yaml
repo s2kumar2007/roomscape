@@ -6,10 +6,13 @@ frames:
   min_blur_abs: 30.0
   dup_threshold: 0.015
   max_side: 1920
+  trim_start_s: 0.0
+  trim_end_s: 0.0
 colmap:
   matcher: sequential       # sequential | exhaustive | vocab_tree
   single_camera: true
   min_registration_rate: 0.80
+  use_gpu: true
 train:
   method: splatfacto
   iterations: 10000

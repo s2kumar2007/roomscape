@@ -10,7 +10,8 @@ import sys, json, pathlib
 a=sys.argv; out=pathlib.Path(a[a.index("--output-dir")+1]); out.mkdir(parents=True, exist_ok=True)
 n=len(list(pathlib.Path(a[a.index("--data")+1]).glob("*.jpg"))); k=int(n*FRAC)
 (out/"transforms.json").write_text(json.dumps({"frames":[{"file_path":f"{i}.jpg"} for i in range(k)]}))
-print("fake colmap done")''',
+(out/"used_no_gpu.txt").write_text("yes" if "--no-gpu" in a else "no")
+print("fake colmap done", "no-gpu" if "--no-gpu" in a else "gpu")''',
 "ns-train": '''#!/usr/bin/env python3
 import sys, pathlib
 a=sys.argv; o=pathlib.Path(a[a.index("--output-dir")+1])/"scene"/"splatfacto"/"run"; o.mkdir(parents=True, exist_ok=True)
@@ -73,3 +74,19 @@ def test_ply_count_and_stats(tmp_path):
     assert ply_vertex_count(p) == 77
     (tmp_path / "transforms.json").write_text(json.dumps({"frames": [1, 2, 3]}))
     assert registration_stats(tmp_path, 4)["registration_rate"] == 0.75
+
+def test_colmap_use_gpu_default_true(fake_env):
+    out = fake_env(0.95)
+    cfg = load_config("pipeline/config.yaml", "fast")
+    assert cfg["colmap"].get("use_gpu") is True
+    reconstruct(cfg, out)
+    assert (out / "ns_data" / "used_no_gpu.txt").read_text() == "no"
+    assert "fake colmap done gpu" in (out / "logs" / "colmap.log").read_text()
+
+def test_colmap_use_gpu_false_passes_no_gpu(fake_env):
+    out = fake_env(0.95)
+    cfg = load_config("pipeline/config.yaml", "fast")
+    cfg["colmap"]["use_gpu"] = False
+    reconstruct(cfg, out)
+    assert (out / "ns_data" / "used_no_gpu.txt").read_text() == "yes"
+    assert "fake colmap done no-gpu" in (out / "logs" / "colmap.log").read_text()
