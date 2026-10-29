@@ -24,6 +24,10 @@ a=sys.argv; o=pathlib.Path(a[a.index("--output-dir")+1]); o.mkdir(parents=True, 
 
 @pytest.fixture
 def fake_env(tmp_path, monkeypatch):
+    monkeypatch.setattr("reconstruct.check_gpu", lambda: {
+        "cuda_available": True, "device_name": "Fake CUDA", "vram_total_gb": 8.0,
+        "vram_free_gb": 7.0, "diagnostic": None,
+    })
     def make(frac):
         b = tmp_path / "bin"; b.mkdir(exist_ok=True)
         for n, body in FAKE.items():
@@ -111,6 +115,12 @@ def test_validate_environment(monkeypatch, tmp_path):
         validate_environment(mock=False)
     assert "Missing required tools in PATH" in str(exc_info.value)
     assert exc_info.value.fix != ""
+
+def test_real_training_requires_cuda():
+    from reconstruct import require_training_gpu
+    with pytest.raises(PipelineError, match="Cannot start Nerfstudio training") as exc_info:
+        require_training_gpu({"cuda_available": False, "diagnostic": None})
+    assert "--mock/--dry-run" in exc_info.value.fix
 
 def test_mock_reconstruct_on_cpu(tmp_path):
     out = tmp_path / "out"

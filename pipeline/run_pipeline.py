@@ -2,7 +2,7 @@
 Usage: python pipeline/run_pipeline.py --video <file_or_folder> --out <dir> [--mode fast|quality] [--resume] [--mock]
 """
 from __future__ import annotations
-import argparse, importlib, sys, time
+import argparse, importlib, sys, time, traceback
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from report import write_report
@@ -67,10 +67,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except PipelineError as e:
         msg = f"{e}" + (f" (Suggested fix: {e.fix})" if e.fix else "")
-        log.error("Stage '%s' failed: %s", current, e)
+        tb = traceback.format_exc()
+        log.error("Stage '%s' failed: %s\n%s", current, e, tb)
         if e.fix: log.error("Suggested fix: %s", e.fix)
         if current: log.error("Fix the problem, then re-run the same command with --resume to continue from this stage.")
-        finish("failed", current, failure_reason=msg)
+        finish("failed", current, failure_reason=f"{msg}\nTraceback:\n{tb}")
         return 2
     except KeyboardInterrupt:
         log.error("Interrupted. Re-run with --resume to continue."); finish("interrupted", current, failure_reason="Interrupted by user"); return 130

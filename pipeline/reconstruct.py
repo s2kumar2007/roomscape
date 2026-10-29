@@ -33,6 +33,7 @@ def check_gpu() -> dict:
         "device_name": None,
         "vram_total_gb": None,
         "vram_free_gb": None,
+        "diagnostic": None,
     }
     try:
         import torch
@@ -50,8 +51,9 @@ def check_gpu() -> dict:
                      gpu_info["device_name"], gpu_info["vram_total_gb"], gpu_info["vram_free_gb"])
         else:
             log.warning("torch.cuda.is_available() is False: splat training requires an NVIDIA GPU with CUDA.")
-    except ImportError:
-        log.warning("torch is not installed; cannot verify CUDA GPU capabilities.")
+    except Exception as e:  # noqa: BLE001
+        gpu_info["diagnostic"] = f"PyTorch GPU check failed: {type(e).__name__}: {e}"
+        log.warning("%s", gpu_info["diagnostic"])
 
     if not shutil.which("nvidia-smi"):
         log.warning("nvidia-smi not found in PATH: splat training requires an NVIDIA GPU (or use the Colab notebook).")
@@ -74,6 +76,19 @@ def validate_environment(mock: bool = False) -> dict:
             "Install missing tools (e.g., conda install -c conda-forge colmap ffmpeg; pip install nerfstudio), or use notebooks/colab_reconstruct.ipynb, or run with --mock / --dry-run."
         )
     return {"tools_ok": True, "gpu": gpu_info, "mock": False}
+
+def require_training_gpu(gpu_info: dict) -> None:
+    """Fail before COLMAP/training work if a real splat training run cannot use CUDA."""
+    if gpu_info.get("cuda_available"):
+        return
+    detail = gpu_info.get("diagnostic") or "torch.cuda.is_available() returned False"
+    name = gpu_info.get("device_name") or "no CUDA device detected"
+    vram = gpu_info.get("vram_total_gb")
+    suffix = f"; detected VRAM: {vram} GB" if vram is not None else ""
+    raise PipelineError(
+        f"Cannot start Nerfstudio training: {detail} ({name}{suffix}).",
+        "Install a CUDA-enabled PyTorch/Nerfstudio build and NVIDIA drivers, or use --mock/--dry-run for a CPU pipeline check.",
+    )
 
 def preflight(mock: bool = False) -> dict:
     """Pre-flight check alias for backward compatibility."""
@@ -132,8 +147,7 @@ def run_cmd(cmd: list[str], logfile: Path, fix: str) -> subprocess.CompletedProc
         with open(logfile, "a", encoding="utf-8") as lf:
             if e.stdout: lf.write(e.stdout + "\n")
             if e.stderr: lf.write(e.stderr + "\n")
-        tail = (e.stderr.strip() or e.stdout.strip()).splitlines()[-15:]
-        err_detail = "\n".join(tail) if tail else f"Exit code {e.returncode}"
+        err_detail = e.stderr.strip() or e.stdout.strip() or f"Exit code {e.returncode}"
         raise PipelineError(f"`{cmd[0]}` failed (exit {e.returncode}). Last output:\n{err_detail}", fix) from e
     except FileNotFoundError as e:
         raise PipelineError(f"Command not found: {cmd[0]}", fix) from e
@@ -281,7 +295,8 @@ def reconstruct(cfg: dict, out: Path) -> dict:
         preflight(mock=True)
         return mock_reconstruct(cfg, out)
 
-    preflight(mock=False)
+    env = preflight(mock=False)
+    require_training_gpu(env["gpu"])
     frames = out / "frames"
     frame_files = sorted({p.resolve() for ext in ("*.jpg", "*.jpeg", "*.png") for p in frames.glob(ext)})
     n_in = len(frame_files)
