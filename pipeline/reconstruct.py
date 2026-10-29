@@ -10,20 +10,74 @@ Flags change between releases, so we also check `--help` output at runtime and w
 from __future__ import annotations
 import json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
+import numpy as np
+from gsplat_io import write_gs_ply, SH_C0
 from utils import PipelineError, get_logger
 
-log = get_logger()
-TOOLS = {"ns-process-data": "pip install nerfstudio  (see https://docs.nerf.studio/quickstart/installation.html)",
-         "ns-train": "pip install nerfstudio", "ns-export": "pip install nerfstudio",
-         "colmap": "conda install -c conda-forge colmap", "ffmpeg": "conda install -c conda-forge ffmpeg"}
+# Ensure Qt platform is offscreen for headless environments (prevents COLMAP Qt crashes)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-def preflight() -> None:
+log = get_logger()
+TOOLS = {
+    "ns-process-data": "pip install nerfstudio  (see https://docs.nerf.studio/quickstart/installation.html)",
+    "ns-train": "pip install nerfstudio",
+    "ns-export": "pip install nerfstudio",
+    "colmap": "conda install -c conda-forge colmap (or apt-get install colmap)",
+    "ffmpeg": "conda install -c conda-forge ffmpeg (or apt-get install ffmpeg)",
+}
+
+def check_gpu() -> dict:
+    """Validate GPU availability, device name, and VRAM via PyTorch and nvidia-smi."""
+    gpu_info = {
+        "cuda_available": False,
+        "device_name": None,
+        "vram_total_gb": None,
+        "vram_free_gb": None,
+    }
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_info["cuda_available"] = True
+            gpu_info["device_name"] = torch.cuda.get_device_name(0)
+            props = torch.cuda.get_device_properties(0)
+            gpu_info["vram_total_gb"] = round(props.total_memory / (1024**3), 2)
+            try:
+                free_b, _ = torch.cuda.mem_get_info(0)
+                gpu_info["vram_free_gb"] = round(free_b / (1024**3), 2)
+            except Exception:
+                gpu_info["vram_free_gb"] = gpu_info["vram_total_gb"]
+            log.info("GPU detected: %s (VRAM: %.2f GB total, %.2f GB free)",
+                     gpu_info["device_name"], gpu_info["vram_total_gb"], gpu_info["vram_free_gb"])
+        else:
+            log.warning("torch.cuda.is_available() is False: splat training requires an NVIDIA GPU with CUDA.")
+    except ImportError:
+        log.warning("torch is not installed; cannot verify CUDA GPU capabilities.")
+
+    if not shutil.which("nvidia-smi"):
+        log.warning("nvidia-smi not found in PATH: splat training requires an NVIDIA GPU (or use the Colab notebook).")
+    return gpu_info
+
+def validate_environment(mock: bool = False) -> dict:
+    """Validate that required binaries and GPU environment are ready.
+    
+    If mock=True, skips tool existence checks to allow running on CPU-only test environments.
+    """
+    gpu_info = check_gpu()
+    if mock:
+        log.info("Mock/dry-run mode enabled: skipping binary preflight checks.")
+        return {"tools_ok": True, "gpu": gpu_info, "mock": True}
+
     missing = [f"{t}  ->  {fix}" for t, fix in TOOLS.items() if not shutil.which(t)]
     if missing:
-        raise PipelineError("Missing required tools:\n  " + "\n  ".join(missing),
-                            "Run scripts/check_gpu.py, or use notebooks/colab_reconstruct.ipynb if you have no local setup.")
-    if not shutil.which("nvidia-smi"):
-        log.warning("nvidia-smi not found: splat training needs an NVIDIA GPU (or use the Colab notebook).")
+        raise PipelineError(
+            "Missing required tools in PATH:\n  " + "\n  ".join(missing),
+            "Install missing tools (e.g., conda install -c conda-forge colmap ffmpeg; pip install nerfstudio), or use notebooks/colab_reconstruct.ipynb, or run with --mock / --dry-run."
+        )
+    return {"tools_ok": True, "gpu": gpu_info, "mock": False}
+
+def preflight(mock: bool = False) -> dict:
+    """Pre-flight check alias for backward compatibility."""
+    return validate_environment(mock=mock)
 
 def check_flags(cmd: list[str], needed: list[str]) -> None:
     """Warn (not fail) if expected flags are absent from `<cmd> --help`: the CLI may have changed."""
@@ -43,30 +97,46 @@ def check_flags(cmd: list[str], needed: list[str]) -> None:
         if f not in txt:
             log.warning("Flag %s not found in `%s --help`; Nerfstudio CLI may have changed. Check docs.nerf.studio.", f, " ".join(cmd))
 
-def run_cmd(cmd: list[str], logfile: Path, fix: str) -> None:
-    """Run a subprocess, stream its output to our logger + a file, and raise on non-zero exit."""
+def run_cmd(cmd: list[str], logfile: Path, fix: str) -> subprocess.CompletedProcess:
+    """Run a subprocess, stream output and stderr to console + logfile, and raise on failure."""
     log.info("$ %s", " ".join(cmd))
     logfile.parent.mkdir(parents=True, exist_ok=True)
-    tail: list[str] = []
     resolved = shutil.which(cmd[0])
     if not resolved:
         raise PipelineError(f"Command not found: {cmd[0]}", fix)
     exec_cmd = cmd
     if sys.platform == "win32" and resolved.lower().endswith((".bat", ".cmd")):
         exec_cmd = [os.environ.get("COMSPEC", "cmd.exe"), "/c", resolved] + cmd[1:]
-    with open(logfile, "a") as lf:
-        try:
-            p = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        except FileNotFoundError as e:
-            raise PipelineError(f"Command not found: {cmd[0]}", fix) from e
-        assert p.stdout is not None
-        for line in p.stdout:
-            line = line.rstrip()
-            lf.write(line + "\n"); tail.append(line); tail[:] = tail[-15:]
-            log.info("  | %s", line)
-        rc = p.wait()
-    if rc != 0:
-        raise PipelineError(f"`{cmd[0]}` failed (exit {rc}). Last output:\n" + "\n".join(tail), fix)
+
+    try:
+        res = subprocess.run(exec_cmd, capture_output=True, text=True, check=True)
+        if res.stdout:
+            for line in res.stdout.splitlines():
+                log.info("  | %s", line)
+        if res.stderr:
+            for line in res.stderr.splitlines():
+                log.warning("  stderr: %s", line)
+        with open(logfile, "a", encoding="utf-8") as lf:
+            if res.stdout: lf.write(res.stdout + "\n")
+            if res.stderr: lf.write(res.stderr + "\n")
+        return res
+    except subprocess.CalledProcessError as e:
+        # Log stderr directly to console and logfile
+        if e.stdout:
+            for line in e.stdout.splitlines():
+                log.info("  | %s", line)
+        if e.stderr:
+            log.error("Command '%s' stderr:\n%s", cmd[0], e.stderr)
+            for line in e.stderr.splitlines():
+                log.error("  ! %s", line)
+        with open(logfile, "a", encoding="utf-8") as lf:
+            if e.stdout: lf.write(e.stdout + "\n")
+            if e.stderr: lf.write(e.stderr + "\n")
+        tail = (e.stderr.strip() or e.stdout.strip()).splitlines()[-15:]
+        err_detail = "\n".join(tail) if tail else f"Exit code {e.returncode}"
+        raise PipelineError(f"`{cmd[0]}` failed (exit {e.returncode}). Last output:\n{err_detail}", fix) from e
+    except FileNotFoundError as e:
+        raise PipelineError(f"Command not found: {cmd[0]}", fix) from e
 
 def registration_stats(data_dir: Path, n_input: int) -> dict:
     """Registered images = frames present in transforms.json (images COLMAP could place)."""
@@ -113,12 +183,111 @@ def eval_metrics(cfg_path: Path, out: Path) -> dict:
     except Exception as e:  # noqa: BLE001
         log.warning("Metric evaluation skipped: %s", str(e).splitlines()[0]); return {}
 
-def reconstruct(cfg: dict, out: Path) -> dict:
-    preflight()
+def _generate_mock_splat(ply_path: Path, n_points: int = 12000) -> int:
+    """Generate a valid 3D Gaussian Splatting PLY room for mock / dry-run testing."""
+    rng = np.random.default_rng(42)
+    W, D, H = 6.0, 4.0, 2.6
+    nf = n_points // 3
+    pts = [np.c_[rng.uniform(0, W, nf), np.zeros(nf), rng.uniform(0, D, nf)]]  # floor y=0
+    nc = n_points // 6
+    pts.append(np.c_[rng.uniform(0, W, nc), np.full(nc, H), rng.uniform(0, D, nc)])  # ceiling
+    nw = n_points // 8
+    pts.append(np.c_[rng.uniform(0, W, nw), rng.uniform(0, H, nw), np.zeros(nw)])
+    pts.append(np.c_[rng.uniform(0, W, nw), rng.uniform(0, H, nw), np.full(nw, D)])
+    pts.append(np.c_[np.zeros(nw), rng.uniform(0, H, nw), rng.uniform(0, D, nw)])
+    pts.append(np.c_[np.full(nw, W), rng.uniform(0, H, nw), rng.uniform(0, D, nw)])
+    nt = n_points // 10
+    pts.append(np.c_[rng.uniform(2, 3.2, nt), np.full(nt, 0.75), rng.uniform(1.5, 2.3, nt)])  # table
+    xyz = np.vstack(pts)
+    n = len(xyz)
+    col = rng.uniform(0.3, 0.8, (n, 3))
+    d = {
+        "xyz": xyz,
+        "dc": (col - 0.5) / SH_C0,
+        "rest": np.zeros((n, 3, 3)),
+        "opacity": np.full(n, 3.0),
+        "scale": np.full((n, 3), np.log(0.02)),
+        "rot": np.tile([1.0, 0.0, 0.0, 0.0], (n, 1)),
+    }
+    write_gs_ply(ply_path, d, sh_degree=1)
+    return n
+
+def mock_reconstruct(cfg: dict, out: Path) -> dict:
+    """Execute mock reconstruction on CPU without GPU for pipeline testing and verification."""
     frames = out / "frames"
-    n_in = len(list(frames.glob("*.jpg")))
+    frame_files = sorted({p.resolve() for ext in ("*.jpg", "*.jpeg", "*.png") for p in frames.glob(ext)})
+    n_in = len(frame_files)
     if n_in == 0:
         raise PipelineError(f"No frames in {frames}", "Run the extract_frames stage first.")
+
+    log.info("[MOCK] Running mock reconstruction for %d input frames on CPU...", n_in)
+    data, train, splat = out / "ns_data", out / "train", out / "splat"
+    data.mkdir(parents=True, exist_ok=True)
+    train.mkdir(parents=True, exist_ok=True)
+    splat.mkdir(parents=True, exist_ok=True)
+    (out / "logs").mkdir(parents=True, exist_ok=True)
+
+    # 1. Mock transforms.json with cameras walking at height y=1.4m
+    cam_frames = []
+    for i, f in enumerate(frame_files):
+        a = i / max(len(frame_files) - 1, 1)
+        pos = np.array([1.0 + 4.0 * a, 1.4, 2.0])
+        R = np.eye(3)
+        c2w = np.vstack([np.c_[R, pos], [0, 0, 0, 1]])
+        cam_frames.append({
+            "file_path": f"../frames/{f.name}",
+            "transform_matrix": c2w.tolist(),
+        })
+    tj = {
+        "fl_x": 1000.0, "fl_y": 1000.0, "cx": 640.0, "cy": 360.0, "w": 1280, "h": 720,
+        "frames": cam_frames,
+    }
+    (data / "transforms.json").write_text(json.dumps(tj, indent=2))
+    (out / "logs" / "colmap.log").write_text("Mock COLMAP completed successfully (CPU dry-run).\n")
+
+    # 2. Mock train output
+    cfg_dir = train / "scene" / "splatfacto" / "run"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    (cfg_dir / "config.yml").write_text("# Mock splatfacto config\n")
+    (out / "logs" / "train.log").write_text("Mock splatfacto training completed (CPU dry-run).\n")
+
+    # 3. Mock Gaussian splat PLY
+    ply = out / "splat.ply"
+    n_pts = _generate_mock_splat(ply)
+    shutil.copy(ply, splat / "splat.ply")
+    (out / "logs" / "export.log").write_text(f"Mock export completed: {n_pts} Gaussians.\n")
+
+    t_cfg = cfg.get("train", {})
+    iterations = t_cfg.get("iterations", 7000)
+    rep = {
+        "images_input": n_in,
+        "images_registered": n_in,
+        "registration_rate": 1.0,
+        "iterations": iterations,
+        "matcher": "mock",
+        "gaussian_count": n_pts,
+        "colmap_seconds": 0.1,
+        "train_seconds": 0.1,
+        "ply_mb": round(ply.stat().st_size / 1e6, 2),
+        "metrics": {},
+    }
+    (out / "reconstruct_report.json").write_text(json.dumps(rep, indent=2))
+    log.info("[MOCK] Reconstruction complete: %d/%d registered, %d Gaussians", n_in, n_in, n_pts)
+    return rep
+
+def reconstruct(cfg: dict, out: Path) -> dict:
+    is_mock = bool(cfg.get("_mock") or cfg.get("_dry_run") or cfg.get("mock") or cfg.get("reconstruct", {}).get("mock"))
+    if is_mock:
+        preflight(mock=True)
+        return mock_reconstruct(cfg, out)
+
+    preflight(mock=False)
+    frames = out / "frames"
+    frame_files = sorted({p.resolve() for ext in ("*.jpg", "*.jpeg", "*.png") for p in frames.glob(ext)})
+    n_in = len(frame_files)
+    if n_in == 0:
+        raise PipelineError(f"No frames in {frames.resolve()}", "Run the extract_frames stage first.")
+
     c, t, logs = cfg["colmap"], cfg["train"], out / "logs"
     resume = bool(cfg.get("_resume"))
     data, train, splat = out / "ns_data", out / "train", out / "splat"
@@ -130,8 +299,12 @@ def reconstruct(cfg: dict, out: Path) -> dict:
         log.info("Reusing existing COLMAP result in %s", data)
     else:
         check_flags(["ns-process-data", "images"], ["--matching-method", "--output-dir"])
-        colmap_cmd = ["ns-process-data", "images", "--data", str(frames), "--output-dir", str(data),
-                      "--matching-method", c["matcher"]]
+        colmap_cmd = [
+            "ns-process-data", "images",
+            "--data", str(frames.resolve()),
+            "--output-dir", str(data.resolve()),
+            "--matching-method", c["matcher"],
+        ]
         if not c.get("use_gpu", True):
             colmap_cmd.append("--no-gpu")
         run_cmd(colmap_cmd, logs / "colmap.log",
@@ -145,14 +318,21 @@ def reconstruct(cfg: dict, out: Path) -> dict:
         log.info("Reusing existing training run in %s", train)
     else:
         check_flags(["ns-train", "splatfacto"], ["--max-num-iterations", "--data"])
-        run_cmd(["ns-train", t["method"], "--data", str(data), "--max-num-iterations", str(t["iterations"]),
-                 "--output-dir", str(train), "--viewer.quit-on-train-completion", "True"],
-                logs / "train.log", "CUDA out of memory? Use fast mode, fewer frames, or the Colab notebook. See logs/train.log.")
+        run_cmd([
+            "ns-train", t["method"],
+            "--data", str(data.resolve()),
+            "--max-num-iterations", str(t["iterations"]),
+            "--output-dir", str(train.resolve()),
+            "--viewer.quit-on-train-completion", "True",
+        ], logs / "train.log", "CUDA out of memory? Use fast mode, fewer frames, or the Colab notebook. See logs/train.log.")
     t_train = time.perf_counter() - t0
     cfg_path = latest_config(train)
 
-    run_cmd(["ns-export", "gaussian-splat", "--load-config", str(cfg_path), "--output-dir", str(splat)],
-            logs / "export.log", "Re-run `ns-export gaussian-splat --help` to check flags.")
+    run_cmd([
+        "ns-export", "gaussian-splat",
+        "--load-config", str(cfg_path.resolve()),
+        "--output-dir", str(splat.resolve()),
+    ], logs / "export.log", "Re-run `ns-export gaussian-splat --help` to check flags.")
     plys = sorted(splat.glob("*.ply"))
     if not plys:
         raise PipelineError(f"No .ply exported to {splat}", "See logs/export.log.")

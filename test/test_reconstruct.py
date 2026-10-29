@@ -90,3 +90,51 @@ def test_colmap_use_gpu_false_passes_no_gpu(fake_env):
     reconstruct(cfg, out)
     assert (out / "ns_data" / "used_no_gpu.txt").read_text() == "yes"
     assert "fake colmap done no-gpu" in (out / "logs" / "colmap.log").read_text()
+
+def test_check_gpu():
+    from reconstruct import check_gpu
+    info = check_gpu()
+    assert isinstance(info, dict)
+    assert "cuda_available" in info
+    assert "device_name" in info
+    assert "vram_total_gb" in info
+
+def test_validate_environment(monkeypatch, tmp_path):
+    from reconstruct import validate_environment
+    # Mock mode should always succeed without checking binaries
+    mock_res = validate_environment(mock=True)
+    assert mock_res["mock"] is True
+    assert mock_res["tools_ok"] is True
+    # Non-mock mode with empty PATH should fail with actionable message
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(PipelineError) as exc_info:
+        validate_environment(mock=False)
+    assert "Missing required tools in PATH" in str(exc_info.value)
+    assert exc_info.value.fix != ""
+
+def test_mock_reconstruct_on_cpu(tmp_path):
+    out = tmp_path / "out"
+    frames = out / "frames"
+    frames.mkdir(parents=True, exist_ok=True)
+    for i in range(25):
+        (frames / f"frame_{i:05d}.jpg").write_bytes(b"dummy")
+
+    cfg = load_config("pipeline/config.yaml", "fast")
+    cfg["_mock"] = True
+    rep = reconstruct(cfg, out)
+    assert rep["registration_rate"] == 1.0
+    assert rep["images_registered"] == 25
+    assert rep["gaussian_count"] > 1000
+    assert (out / "splat.ply").exists()
+    assert (out / "ns_data" / "transforms.json").exists()
+    assert (out / "reconstruct_report.json").exists()
+
+def test_subprocess_stderr_logged_to_console(tmp_path, caplog):
+    caplog.set_level("ERROR", logger="roomscape")
+    cmd = [sys.executable, "-c", "import sys; sys.stderr.write('fatal cuda error\\n'); sys.exit(2)"]
+    with pytest.raises(PipelineError) as exc_info:
+        run_cmd(cmd, tmp_path / "err.log", "check your drivers")
+    assert "exit 2" in str(exc_info.value)
+    assert "fatal cuda error" in str(exc_info.value)
+    assert exc_info.value.fix == "check your drivers"
+    assert any("fatal cuda error" in r.message for r in caplog.records)

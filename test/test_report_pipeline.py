@@ -35,7 +35,30 @@ def test_failed_stage_gives_failed_report_and_resume_hint(tmp_path, caplog):
     assert main(["--video", str(v), "--out", str(out), "--resume", "--config", str(_cfg(tmp_path))]) == 2
     r = json.loads((out / "report.json").read_text())
     assert r["status"] == "failed" and r["failed_stage"] == "align_scene"
+    assert r.get("failure_reason") is not None and "splat.ply" in r["failure_reason"]
+    md = (out / "report.md").read_text()
+    assert "Failure reason" in md and "splat.ply" in md
     assert any("--resume" in m.message for m in caplog.records)
+
+def test_mock_pipeline_runs_end_to_end_on_cpu(synth_video, tmp_path):
+    out = tmp_path / "mock_out"
+    cfg_file = _cfg(tmp_path)
+    ret = main([
+        "--video", str(synth_video),
+        "--out", str(out),
+        "--config", str(cfg_file),
+        "--mock",
+        "--frames", "25",
+    ])
+    assert ret == 0
+    r = json.loads((out / "report.json").read_text())
+    assert r["status"] == "ok"
+    assert set(r["stage_seconds"]) == {"extract_frames", "reconstruct", "align_scene", "build_collision", "export_scene"}
+    assert r["frames"]["kept"] > 0
+    assert r["reconstruction"]["registration_rate"] == 1.0
+    assert r["reconstruction"]["gaussian_count"] > 0
+    assert (out / "debug" / "floor_alignment.png").exists()
+    assert (out / "occupancy.png").exists()
 
 def test_missing_data_is_null_not_invented(tmp_path):
     r = build_report(tmp_path, "fast", 1.0)

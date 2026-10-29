@@ -7,7 +7,7 @@ def _load(p: Path) -> dict:
     try: return json.loads(p.read_text())
     except (OSError, ValueError): return {}
 
-def build_report(out: Path, mode: str, wall_s: float, status: str = "ok", failed_stage: str | None = None, stages: list[str] | None = None) -> dict:
+def build_report(out: Path, mode: str, wall_s: float, status: str = "ok", failed_stage: str | None = None, stages: list[str] | None = None, failure_reason: str | None = None) -> dict:
     t, fr, rc = _load(out / "timings.json"), _load(out / "frames_report.json"), _load(out / "reconstruct_report.json")
     tr, ex, col = _load(out / "transform.json"), _load(out / "export_report.json"), _load(out / "collision.json")
     meta = _load(out / "scene" / "meta.json")
@@ -18,7 +18,7 @@ def build_report(out: Path, mode: str, wall_s: float, status: str = "ok", failed
         if "collision_walkable_area_m2" in t.get("build_collision", {}) or "walkable_area_m2" in t.get("build_collision", {}):
             grid["walkable_area_m2"] = t["build_collision"].get("walkable_area_m2")
     return {
-        "status": status, "failed_stage": failed_stage, "mode": mode,
+        "status": status, "failed_stage": failed_stage, "failure_reason": failure_reason, "mode": mode,
         "stage_seconds": per, "total_stage_seconds": round(sum(per.values()), 1), "this_invocation_seconds": round(wall_s, 1),
         "frames": {k: fr.get(k) for k in ("kept", "candidates", "dropped_blur", "dropped_duplicate", "avg_sharpness", "target_count")},
         "reconstruction": {k: rc.get(k) for k in ("images_input", "images_registered", "registration_rate", "matcher", "iterations", "gaussian_count", "colmap_seconds", "train_seconds", "metrics")},
@@ -34,8 +34,10 @@ def _f(v, fmt="{}", none="n/a"):
 
 def render_md(r: dict) -> str:
     fr, rc, al, ex = r["frames"], r["reconstruction"], r["alignment"], r["export"]
-    L = [f"# Roomscape: run report", "", f"**Status:** {r['status']}" + (f" (failed at `{r['failed_stage']}`)" if r["failed_stage"] else "") + f"  |  **Mode:** {r['mode']}",
-         "", "## Timing", "", "| Stage | Seconds |", "|---|---|"]
+    L = [f"# Roomscape: run report", "", f"**Status:** {r['status']}" + (f" (failed at `{r['failed_stage']}`)" if r["failed_stage"] else "") + f"  |  **Mode:** {r['mode']}"]
+    if r.get("failure_reason"):
+        L.append(f"**Failure reason:** {r['failure_reason']}")
+    L += ["", "## Timing", "", "| Stage | Seconds |", "|---|---|"]
     L += [f"| {s} | {v} |" for s, v in r["stage_seconds"].items()]
     L += [f"| **Total (sum of stages)** | **{r['total_stage_seconds']}** |", "",
           "## Results", "", "| Metric | Value |", "|---|---|",
@@ -51,7 +53,7 @@ def render_md(r: dict) -> str:
     L.append("Viewer: `cd viewer && npm run dev` (scene already copied to `viewer/public/scene/`).")
     return "\n".join(L) + "\n"
 
-def write_report(out: Path, mode: str, wall_s: float, status: str = "ok", failed_stage: str | None = None, stages: list[str] | None = None) -> dict:
-    r = build_report(out, mode, wall_s, status, failed_stage, stages)
+def write_report(out: Path, mode: str, wall_s: float, status: str = "ok", failed_stage: str | None = None, stages: list[str] | None = None, failure_reason: str | None = None) -> dict:
+    r = build_report(out, mode, wall_s, status, failed_stage, stages, failure_reason=failure_reason)
     (out / "report.json").write_text(json.dumps(r, indent=2)); (out / "report.md").write_text(render_md(r))
     return r

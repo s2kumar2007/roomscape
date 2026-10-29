@@ -1,5 +1,5 @@
 """One-command pipeline.
-Usage: python pipeline/run_pipeline.py --video <file_or_folder> --out <dir> [--mode fast|quality] [--resume]
+Usage: python pipeline/run_pipeline.py --video <file_or_folder> --out <dir> [--mode fast|quality] [--resume] [--mock]
 """
 from __future__ import annotations
 import argparse, importlib, sys, time
@@ -30,13 +30,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--trim-start", type=float, help="trim video before this timestamp in seconds")
     ap.add_argument("--trim-end", type=float, help="trim video after this timestamp in seconds")
     ap.add_argument("--no-gpu", action="store_true", help="run COLMAP without GPU")
+    ap.add_argument("--mock", "--dry-run", dest="mock", action="store_true", help="mock reconstruction without GPU (for testing on CPU)")
     a = ap.parse_args(argv)
     log = get_logger()
     t0, current, mode = time.perf_counter(), None, a.mode
-    def finish(status: str, failed: str | None = None) -> None:
+    def finish(status: str, failed: str | None = None, failure_reason: str | None = None) -> None:
         if a.out.exists():
             try:
-                write_report(a.out, mode, time.perf_counter() - t0, status, failed, STAGES)
+                write_report(a.out, mode, time.perf_counter() - t0, status, failed, STAGES, failure_reason=failure_reason)
                 log.info("Report: %s and %s", a.out / "report.md", a.out / "report.json")
             except Exception as e:  # noqa: BLE001  (a report problem must never hide the real result)
                 log.warning("Could not write report: %s", e)
@@ -44,6 +45,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg = load_config(a.config, a.mode)
         cfg["_resume"] = a.resume
         cfg["_format"] = a.format
+        cfg["_mock"] = a.mock
+        cfg["_dry_run"] = a.mock
         if a.frames is not None:
             cfg["frames"]["target_count"] = a.frames
         if a.trim_start is not None:
@@ -54,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             cfg["colmap"]["use_gpu"] = False
         videos = find_videos(a.video)
         a.out.mkdir(parents=True, exist_ok=True)
-        log.info("mode=%s videos=%d out=%s", a.mode, len(videos), a.out)
+        log.info("mode=%s videos=%d out=%s mock=%s", a.mode, len(videos), a.out, a.mock)
         for current in STAGES:
             mod = importlib.import_module(current)
             run_stage(current, lambda m=mod: m.run(cfg, a.out, videos), a.out, a.resume)
@@ -63,17 +66,21 @@ def main(argv: list[str] | None = None) -> int:
         log.info("Pipeline finished. Preview: cd viewer && npm run dev")
         return 0
     except PipelineError as e:
+        msg = f"{e}" + (f" (Suggested fix: {e.fix})" if e.fix else "")
         log.error("Stage '%s' failed: %s", current, e)
         if e.fix: log.error("Suggested fix: %s", e.fix)
         if current: log.error("Fix the problem, then re-run the same command with --resume to continue from this stage.")
-        finish("failed", current)
+        finish("failed", current, failure_reason=msg)
         return 2
     except KeyboardInterrupt:
-        log.error("Interrupted. Re-run with --resume to continue."); finish("interrupted", current); return 130
+        log.error("Interrupted. Re-run with --resume to continue."); finish("interrupted", current, failure_reason="Interrupted by user"); return 130
     except Exception as e:  # noqa: BLE001
+        err_msg = f"{type(e).__name__}: {e}"
+        if hasattr(e, "stderr") and getattr(e, "stderr"):
+            err_msg += f"\nStderr:\n{getattr(e, 'stderr')}"
         log.exception("Unexpected error in stage '%s': %s", current, e)
         log.error("This is a bug or an environment problem. Check out/logs/, then retry with --resume.")
-        finish("failed", current); return 1
+        finish("failed", current, failure_reason=err_msg); return 1
 
 if __name__ == "__main__":
     sys.exit(main())
