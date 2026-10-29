@@ -1,4 +1,6 @@
 out/
+.venv/
+.pytest-tmp/
 __pycache__/
 .pytest_cache/
 viewer/node_modules/
