@@ -5,7 +5,10 @@ export class UI {
   private help = $("help"); private fpsEl = $("fps");
   constructor(private onReset: () => void) {
     window.addEventListener("keydown", (e) => {
-      if (e.code === "KeyH") this.toggleHelp();
+      if (e.code === "KeyH" || (e.code === "Slash" && e.shiftKey)) {
+        e.preventDefault();
+        this.toggleHelp();
+      }
       if (e.code === "KeyF") this.fpsEl.style.display = this.fpsEl.style.display === "block" ? "none" : "block";
       if (e.code === "KeyR") this.onReset();
     });
