@@ -322,8 +322,18 @@ def reconstruct(cfg: dict, out: Path) -> dict:
         ]
         if not c.get("use_gpu", True):
             colmap_cmd.append("--no-gpu")
-        run_cmd(colmap_cmd, logs / "colmap.log",
-                "Check COLMAP installs (`colmap -h`). Try matcher=exhaustive in config.yaml, or capture per docs/SOP.md.")
+        try:
+            run_cmd(colmap_cmd, logs / "colmap.log",
+                    "Check COLMAP installs (`colmap -h`). Try matcher=exhaustive in config.yaml, or capture per docs/SOP.md.")
+        except PipelineError as e:
+            # Headless Linux / Colab without OpenGL X11 context crashes with context_.create()
+            if "--no-gpu" not in colmap_cmd and any(k in str(e) for k in ("context_.create()", "opengl_utils", "Check failed: context_", "OpenGL", "SiftExtraction.use_gpu")):
+                log.warning("COLMAP OpenGL/GPU SIFT failed because headless Linux lacks an OpenGL display context. Automatically falling back to CPU SIFT (--no-gpu)...")
+                colmap_fallback_cmd = list(colmap_cmd) + ["--no-gpu"]
+                run_cmd(colmap_fallback_cmd, logs / "colmap.log",
+                        "COLMAP failed on CPU as well. Check COLMAP installs (`colmap -h`) or capture per docs/SOP.md.")
+            else:
+                raise
     t_colmap = time.perf_counter() - t0
     reg = registration_stats(data, n_in)
     check_registration(reg, c["min_registration_rate"])

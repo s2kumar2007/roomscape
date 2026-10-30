@@ -41,6 +41,9 @@ def sample_candidates(path: Path, vid: int, fps_target: float, max_side: int,
         raise PipelineError(f"Cannot open video {path}", "Check the file is a valid MP4/MOV and ffmpeg codecs are installed.")
     cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)  # honour phone rotation metadata
     step, next_t, out, idx = 1.0 / fps_target, 0.0, [], 0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    log.info("Scanning %s (total frames ~%d, target sampling %g fps)...", path.name, total_frames, fps_target)
+
     while cap.grab():
         curr_n = idx
         t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
@@ -50,7 +53,7 @@ def sample_candidates(path: Path, vid: int, fps_target: float, max_side: int,
         if trim_start_s > 0 and t + 1e-6 < trim_start_s:
             continue
         if trim_end_s > 0 and t - 1e-6 > trim_end_s:
-            continue
+            break
         if t + 1e-6 < next_t:
             continue
         ok, frame = cap.retrieve()
@@ -61,6 +64,9 @@ def sample_candidates(path: Path, vid: int, fps_target: float, max_side: int,
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         thumb = cv2.resize(gray, (64, 64), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
         out.append(Cand(vid, t, curr_n, sharpness(gray), thumb))
+        if len(out) % 100 == 0 or idx % 600 == 0:
+            pct = f" ({idx * 100 // total_frames}%)" if total_frames > 0 else ""
+            log.info("  scanned frame %d%s: %d candidates at t=%.1fs...", idx, pct, len(out), t)
     cap.release()
     return out
 
@@ -98,6 +104,7 @@ def save_selected(video: Path, chosen: list[Cand], out_dir: Path, max_side: int,
         chosen_by_n.setdefault(c.n, []).append(pos)
 
     saved, idx = 0, 0
+    log.info("Saving %d selected frames to %s...", len(chosen), out_dir)
     while cap.grab():
         if idx in chosen_by_n:
             ok, frame = cap.retrieve()
@@ -110,6 +117,8 @@ def save_selected(video: Path, chosen: list[Cand], out_dir: Path, max_side: int,
             for pos in chosen_by_n[idx]:
                 cv2.imwrite(str(out_dir / f"frame_{start_idx + pos:05d}.jpg"), frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
                 saved += 1
+                if saved % 50 == 0 or saved == len(chosen):
+                    log.info("  wrote %d / %d frames...", saved, len(chosen))
             if saved == len(chosen):
                 break
         idx += 1
