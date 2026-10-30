@@ -52,7 +52,12 @@ def test_export_formats_and_meta(scene):
     meta = json.loads((out / "scene" / "meta.json").read_text())
     assert meta["format"] == "splat" and meta["scale"]["method"] == "apriltag"   # 'bogus' fell back to splat
     assert abs(meta["spawn"]["position"][1] - 1.6) < 1e-6 and -3.15 <= meta["spawn"]["yaw"] <= 3.15
-    dest = out / "viewer_scene"; assert (dest / "scene.splat").exists() and (dest / "collision.json").exists() and (dest / "meta.json").exists()
+    dest = out / "viewer_scene"
+    assert (dest / "scene.splat").exists() and (dest / "collision.json").exists() and (dest / "meta.json").exists()
+    assert (dest / "scene_info.json").exists() and (out / "scene_info.json").exists()
+    info = json.loads((dest / "scene_info.json").read_text())
+    assert "spawn_position" in info and "bounding_box" in info and "floor_height" in info and "scale_factor" in info
+    assert info["floor_height"] == 0.0 and len(info["spawn_position"]) == 3
     assert not (dest / "scene.ply").exists()
     s = read_splat(dest / "scene.splat"); assert len(s["xyz"]) == meta["gaussian_count"]
     assert (dest / "scene.splat").stat().st_size == 32 * meta["gaussian_count"]
@@ -74,3 +79,4 @@ def test_pipeline_end_to_end_from_aligned_stages(tmp_path):
     t = json.loads((out / "timings.json").read_text())
     assert {"align_scene", "build_collision", "export_scene"} <= set(t)
     assert (tmp_path / "vs" / "scene.splat").exists()
+    assert (tmp_path / "vs" / "scene_info.json").exists()

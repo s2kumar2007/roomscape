@@ -1,11 +1,11 @@
-/** DOM UI: loading screen, help (H), FPS counter (F), fullscreen, reset, scale banner. */
+/** DOM UI: loading screen, help (H or ?), FPS counter (F), fullscreen, reset, scale banner. */
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 export class UI {
   private help = $("help"); private fpsEl = $("fps");
   constructor(private onReset: () => void) {
     window.addEventListener("keydown", (e) => {
-      if (e.code === "KeyH" || (e.code === "Slash" && e.shiftKey)) {
+      if (e.key === "?" || e.key.toLowerCase() === "h" || e.code === "KeyH" || (e.code === "Slash" && e.shiftKey)) {
         e.preventDefault();
         this.toggleHelp();
       }

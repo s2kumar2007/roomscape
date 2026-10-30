@@ -83,6 +83,23 @@ def export(cfg: dict, out: Path, fmt: str | None = None) -> dict:
             "bounds": col["bounds"], "scale": {"method": tr["method"], "factor": tr["scale"], "approximate": tr["approximate"], "confidence": tr["confidence"]},
             "collision_file": "collision.json", "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
     (scene / "meta.json").write_text(json.dumps(meta, indent=2))
+    scene_info = {
+        "version": 1,
+        "scene_file": f.name,
+        "format": ext,
+        "spawn_position": [round(sx, 3), cfg["viewer"]["eye_height_m"], round(sz, 3)],
+        "spawn_yaw": round(yaw, 4),
+        "bounding_box": col["bounds"],
+        "floor_height": 0.0,
+        "scale_factor": tr["scale"],
+        "scale_method": tr["method"],
+        "approximate_scale": tr["approximate"],
+        "scale_confidence": tr["confidence"],
+        "gaussian_count": int(len(d["xyz"])),
+        "size_mb": round(f.stat().st_size / 1e6, 2),
+    }
+    (scene / "scene_info.json").write_text(json.dumps(scene_info, indent=2))
+    (out / "scene_info.json").write_text(json.dumps(scene_info, indent=2))
     shutil.copy(out / "collision.json", scene / "collision.json")
     dest = Path(e["viewer_scene_dir"]) if e.get("viewer_scene_dir") else Path(__file__).resolve().parent.parent / "viewer" / "public" / "scene"
     dest.mkdir(parents=True, exist_ok=True)

@@ -64,6 +64,15 @@ def test_align_fallback_without_images(tmp_path):
     assert t["method"] == "camera_height_fallback" and t["approximate"]
     assert abs(t["median_camera_height_m"] - 1.4) < 0.05
 
+def test_align_fallback_door_height(tmp_path):
+    synthetic.make(tmp_path, with_images=False)
+    cfg = load_cfg()
+    cfg["align"]["fallback_scale_method"] = "door_height"
+    cfg["align"]["fallback_door_height_m"] = 2.1
+    t = align(cfg, tmp_path)
+    assert t["method"] == "door_height_fallback" and t["approximate"]
+    assert t["scale"] > 0
+
 def load_cfg():
     return load_config("pipeline/config.yaml", "fast")
 

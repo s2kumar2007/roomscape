@@ -3,7 +3,7 @@
 1. Floor: vectorised RANSAC plane fit on the lowest part of the scene (along mean camera-up), normal
    constrained near camera-up. Rotate normal -> +Y, translate floor -> Y=0.
 2. Scale: (a) triangulate an AprilTag/ArUco marker of known size from the camera rays -> metres per unit;
-   (b) fallback: median camera height := fallback height (approximate, flagged).
+   (b) fallback: median camera height := fallback height (~1.4 m) or door height (~2.1 m) (approximate, flagged).
 3. Apply similarity to positions, rotations (quaternions), scales (log) and SH degree-1 coefficients
    (higher SH bands are dropped: rotating them needs Wigner matrices; documented trade-off).
 Nerfstudio trains in a dataparser-transformed frame; camera poses are mapped into it via
@@ -175,8 +175,22 @@ def align(cfg: dict, out: Path) -> dict:
     else:
         hmed = float(np.median(cam_p[:, 1]))
         if hmed <= 0: raise PipelineError("Camera heights are non-positive after floor alignment.", "Floor fit is likely wrong; check out/debug/floor_alignment.png.")
-        s, method, approx, conf = a["fallback_camera_height_m"] / hmed, "camera_height_fallback", True, 0.3
-        log.warning("No usable marker: scale is APPROXIMATE (median camera height := %.2f m).", a["fallback_camera_height_m"])
+        fallback_method = a.get("fallback_scale_method", "camera_height")
+        if fallback_method == "door_height" and a.get("fallback_door_height_m"):
+            door_h = float(a["fallback_door_height_m"])
+            y_pts = (d["xyz"] @ R.T)[:, 1] - y0
+            pos_y = y_pts[y_pts > 0]
+            feature_h = float(np.quantile(pos_y, 0.85)) if len(pos_y) > 50 else hmed * 1.5
+            s = door_h / feature_h
+            method = "door_height_fallback"
+            approx, conf = True, 0.25
+            log.warning("No usable marker: scale is APPROXIMATE (door height fallback := %.2f m).", door_h)
+        else:
+            cam_h = float(a.get("fallback_camera_height_m", 1.4))
+            s = cam_h / hmed
+            method = "camera_height_fallback"
+            approx, conf = True, 0.3
+            log.warning("No usable marker: scale is APPROXIMATE (median camera height := %.2f m).", cam_h)
     # apply similarity  p' = s * (R p - y0*e_y)
     q = mat_to_quat(R)
     xyz = d["xyz"] @ R.T; xyz[:, 1] -= y0; xyz *= s

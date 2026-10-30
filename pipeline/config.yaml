@@ -23,6 +23,8 @@ align:
   tag_family: tag36h11
   tag_size_m: 0.20
   fallback_camera_height_m: 1.4
+  fallback_door_height_m: 2.1
+  fallback_scale_method: camera_height       # camera_height | door_height
 collision:
   cell_size_m: 0.10
   agent_radius_m: 0.25
