@@ -59,6 +59,12 @@ def check_gpu() -> dict:
         log.warning("nvidia-smi not found in PATH: splat training requires an NVIDIA GPU (or use the Colab notebook).")
     return gpu_info
 
+def _is_headless_linux() -> bool:
+    """Return whether Linux lacks a display server for COLMAP's OpenGL SIFT path."""
+    return sys.platform.startswith("linux") and not (
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    )
+
 def validate_environment(mock: bool = False) -> dict:
     """Validate that required binaries and GPU environment are ready.
     
@@ -322,7 +328,7 @@ def reconstruct(cfg: dict, out: Path) -> dict:
         ]
         if not c.get("use_gpu", True):
             colmap_cmd.append("--no-gpu")
-        elif sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        elif _is_headless_linux():
             # COLMAP's CUDA SIFT path may still require an OpenGL context, which
             # is unavailable in headless Colab/CI/Linux sessions.
             log.info("Headless Linux detected; selecting CPU SIFT to avoid COLMAP OpenGL context failure.")

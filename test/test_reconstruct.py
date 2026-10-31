@@ -79,13 +79,22 @@ def test_ply_count_and_stats(tmp_path):
     (tmp_path / "transforms.json").write_text(json.dumps({"frames": [1, 2, 3]}))
     assert registration_stats(tmp_path, 4)["registration_rate"] == 0.75
 
-def test_colmap_use_gpu_default_true(fake_env):
+def test_colmap_use_gpu_default_true(fake_env, monkeypatch):
+    # This test describes the configured GPU path, so simulate an X11 display.
+    monkeypatch.setenv("DISPLAY", ":99")
     out = fake_env(0.95)
     cfg = load_config("pipeline/config.yaml", "fast")
     assert cfg["colmap"].get("use_gpu") is True
     reconstruct(cfg, out)
     assert (out / "ns_data" / "used_no_gpu.txt").read_text() == "no"
     assert "fake colmap done gpu" in (out / "logs" / "colmap.log").read_text()
+
+def test_headless_linux_detection(monkeypatch):
+    from reconstruct import _is_headless_linux
+    monkeypatch.setattr("reconstruct.sys.platform", "linux")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    assert _is_headless_linux()
 
 def test_colmap_use_gpu_false_passes_no_gpu(fake_env):
     out = fake_env(0.95)
