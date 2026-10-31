@@ -2,7 +2,7 @@
 Usage: python pipeline/run_pipeline.py --video <file_or_folder> --out <dir> [--mode fast|quality] [--resume] [--mock]
 """
 from __future__ import annotations
-import argparse, importlib, sys, time, traceback
+import argparse, importlib, json, sys, time, traceback
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from report import write_report
@@ -35,9 +35,11 @@ def main(argv: list[str] | None = None) -> int:
     log = get_logger()
     t0, current, mode = time.perf_counter(), None, a.mode
     def finish(status: str, failed: str | None = None, failure_reason: str | None = None) -> None:
+        if a.mock and status == "ok":
+            status = "mock"
         if a.out.exists():
             try:
-                write_report(a.out, mode, time.perf_counter() - t0, status, failed, STAGES, failure_reason=failure_reason)
+                write_report(a.out, mode, time.perf_counter() - t0, status, failed, STAGES, failure_reason=failure_reason, mock=a.mock)
                 log.info("Report: %s and %s", a.out / "report.md", a.out / "report.json")
             except Exception as e:  # noqa: BLE001  (a report problem must never hide the real result)
                 log.warning("Could not write report: %s", e)
@@ -47,6 +49,13 @@ def main(argv: list[str] | None = None) -> int:
         cfg["_format"] = a.format
         cfg["_mock"] = a.mock
         cfg["_dry_run"] = a.mock
+        if a.mock:
+            cfg["mock"] = True
+            a.out.mkdir(parents=True, exist_ok=True)
+            tpath = a.out / "timings.json"
+            tdata = json.loads(tpath.read_text()) if tpath.exists() else {}
+            tdata["mock"] = True
+            tpath.write_text(json.dumps(tdata, indent=2))
         if a.frames is not None:
             cfg["frames"]["target_count"] = a.frames
         if a.trim_start is not None:
@@ -60,10 +69,13 @@ def main(argv: list[str] | None = None) -> int:
         log.info("mode=%s videos=%d out=%s mock=%s", a.mode, len(videos), a.out, a.mock)
         for current in STAGES:
             mod = importlib.import_module(current)
-            run_stage(current, lambda m=mod: m.run(cfg, a.out, videos), a.out, a.resume)
+            run_stage(current, lambda m=mod: m.run(cfg, a.out, videos), a.out, a.resume, mock=a.mock)
         current = None
-        finish("ok")
-        log.info("Pipeline finished. Preview: cd viewer && npm run dev")
+        finish("mock" if a.mock else "ok")
+        if a.mock:
+            log.info("Mock pipeline finished (CPU dry-run). Status: mock.")
+        else:
+            log.info("Pipeline finished. Preview: cd viewer && npm run dev")
         return 0
     except PipelineError as e:
         msg = f"{e}" + (f" (Suggested fix: {e.fix})" if e.fix else "")

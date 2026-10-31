@@ -285,6 +285,7 @@ def mock_reconstruct(cfg: dict, out: Path) -> dict:
         "registration_rate": 1.0,
         "iterations": iterations,
         "matcher": "mock",
+        "mock": True,
         "gaussian_count": n_pts,
         "colmap_seconds": 0.1,
         "train_seconds": 0.1,

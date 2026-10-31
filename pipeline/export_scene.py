@@ -77,11 +77,29 @@ def export(cfg: dict, out: Path, fmt: str | None = None) -> dict:
         k = int(np.argmin((cx - p0[0]) ** 2 + (cz - p0[2]) ** 2)); sx, sz = float(cx[k]), float(cz[k])
         log.warning("First camera not on a walkable cell; spawn snapped to (%.2f, %.2f).", sx, sz)
     yaw = float(np.arctan2(-f0[0], -f0[2]))   # three.js: forward=(-sin yaw, 0, -cos yaw)
+    is_mock = bool(
+        cfg.get("_mock")
+        or cfg.get("_dry_run")
+        or cfg.get("mock")
+        or (
+            (out / "timings.json").exists()
+            and json.loads((out / "timings.json").read_text()).get("mock")
+        )
+        or (
+            (out / "reconstruct_report.json").exists()
+            and (
+                json.loads((out / "reconstruct_report.json").read_text()).get("matcher") == "mock"
+                or json.loads((out / "reconstruct_report.json").read_text()).get("mock") is True
+            )
+        )
+    )
     meta = {"version": 1, "scene_file": f.name, "format": ext, "gaussian_count": int(len(d["xyz"])), "size_mb": round(f.stat().st_size / 1e6, 2),
             "spawn": {"position": [round(sx, 3), cfg["viewer"]["eye_height_m"], round(sz, 3)], "yaw": round(yaw, 4)},
             "eye_height": cfg["viewer"]["eye_height_m"], "walk_speed": cfg["viewer"]["walk_speed"], "run_speed": cfg["viewer"]["run_speed"],
             "bounds": col["bounds"], "scale": {"method": tr["method"], "factor": tr["scale"], "approximate": tr["approximate"], "confidence": tr["confidence"]},
             "collision_file": "collision.json", "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    if is_mock:
+        meta["mock"] = True
     (scene / "meta.json").write_text(json.dumps(meta, indent=2))
     scene_info = {
         "version": 1,
@@ -98,16 +116,23 @@ def export(cfg: dict, out: Path, fmt: str | None = None) -> dict:
         "gaussian_count": int(len(d["xyz"])),
         "size_mb": round(f.stat().st_size / 1e6, 2),
     }
+    if is_mock:
+        scene_info["mock"] = True
     (scene / "scene_info.json").write_text(json.dumps(scene_info, indent=2))
     (out / "scene_info.json").write_text(json.dumps(scene_info, indent=2))
     shutil.copy(out / "collision.json", scene / "collision.json")
     dest = Path(e["viewer_scene_dir"]) if e.get("viewer_scene_dir") else Path(__file__).resolve().parent.parent / "viewer" / "public" / "scene"
-    dest.mkdir(parents=True, exist_ok=True)
-    for old in dest.glob("scene.*"): old.unlink()
-    (dest / "SYNTHETIC_DEMO.txt").unlink(missing_ok=True)   # a real export replaces the synthetic demo scene
-    for x in scene.iterdir(): shutil.copy(x, dest / x.name)
+    if not is_mock:
+        dest.mkdir(parents=True, exist_ok=True)
+        for old in dest.glob("scene.*"): old.unlink()
+        (dest / "SYNTHETIC_DEMO.txt").unlink(missing_ok=True)   # a real export replaces the synthetic demo scene
+        for x in scene.iterdir(): shutil.copy(x, dest / x.name)
+    else:
+        log.info("[MOCK] Mock run: skipped copy to viewer directory (%s)", dest)
     rep = {"format": ext, "gaussians_before": n0, "gaussians_after": meta["gaussian_count"], "size_mb_before_ply": round((out / "aligned.ply").stat().st_size / 1e6, 2),
-           "size_mb_after": meta["size_mb"], "viewer_dir": str(dest)}
+           "size_mb_after": meta["size_mb"], "viewer_dir": str(dest) if not is_mock else None}
+    if is_mock:
+        rep["mock"] = True
     if meta["size_mb"] > e["max_size_mb"]: log.warning("Scene is %.1f MB (> %d MB target).", meta["size_mb"], e["max_size_mb"])
     (out / "export_report.json").write_text(json.dumps(rep, indent=2))
     log.info("Exported %s: %d -> %d Gaussians, %.1f -> %.1f MB", ext, n0, rep["gaussians_after"], rep["size_mb_before_ply"], rep["size_mb_after"])

@@ -33,12 +33,14 @@ def load_config(path: str | Path, mode: str = "fast") -> dict[str, Any]:
         raise PipelineError(f"Unknown mode '{mode}'", f"Use one of: {list(presets)}")
     return _merge(cfg, presets[mode])
 
-def run_stage(name: str, fn: Callable[[], dict | None], out: Path, resume: bool) -> dict:
+def run_stage(name: str, fn: Callable[[], dict | None], out: Path, resume: bool, mock: bool = False) -> dict:
     """Run one stage: log, time, write out/timings.json, and write a .done marker."""
     log = get_logger()
     marker = out / ".markers" / f"{name}.done"
     tpath = out / "timings.json"
     timings = json.loads(tpath.read_text()) if tpath.exists() else {}
+    if mock:
+        timings["mock"] = True
     if resume and marker.exists():
         log.info("[%s] skipped (resume: marker found)", name)
         return timings.get(name, {})
@@ -48,6 +50,8 @@ def run_stage(name: str, fn: Callable[[], dict | None], out: Path, resume: bool)
     dt = round(time.perf_counter() - t0, 2)
     log.info("[%s] done in %.2fs", name, dt)
     timings[name] = {"seconds": dt, **result}
+    if mock:
+        timings["mock"] = True
     tpath.write_text(json.dumps(timings, indent=2))
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text("ok")

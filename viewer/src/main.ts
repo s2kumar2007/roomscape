@@ -43,7 +43,11 @@ async function main(): Promise<void> {
   controls.setSpawn(meta.spawn.position[0], meta.spawn.position[2], meta.spawn.yaw);
   reset = () => controls.reset();
   const minimap = new Minimap(document.getElementById("minimap") as HTMLCanvasElement, col);
-  if (meta.scale.approximate) ui.banner("Scale is approximate (no marker detected)");
+  if (meta.mock) {
+    ui.banner("MOCK SCENE", true);
+  } else if (meta.scale.approximate) {
+    ui.banner("Scale is approximate (no marker detected)");
+  }
   window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer };
 
   const onResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };

@@ -7,6 +7,7 @@ export interface Meta {
   bounds: { min: number[]; max: number[] };
   scale: { method: string; factor: number; approximate: boolean; confidence: number };
   collision_file: string;
+  mock?: boolean;
 }
 export interface LoadedScene { meta: Meta; collision: CollisionDoc; bytes: Uint8Array; base: string }
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import synthetic
 from run_pipeline import main
-from report import build_report
+from report import build_report, render_md
 
 def _cfg(tmp):
     c = tmp / "cfg.yaml"; c.write_text(open("pipeline/config.yaml").read().replace("viewer_scene_dir: null", f"viewer_scene_dir: {tmp / 'vs'}")); return c
@@ -27,6 +27,7 @@ def test_report_written_with_real_values_only(tmp_path):
     assert r["alignment"]["scale_method"] == "apriltag" and r["export"]["gaussians_after"] > 0 and r["export"]["size_mb_after"] > 0
     md = (out / "report.md").read_text()
     assert "Registration rate | 95.0%" in md and "apriltag" in md and "| align_scene |" in md
+    assert not md.startswith("**MOCK RUN")
 
 def test_failed_stage_gives_failed_report_and_resume_hint(tmp_path, caplog):
     out, v = _prep(tmp_path)
@@ -52,13 +53,76 @@ def test_mock_pipeline_runs_end_to_end_on_cpu(synth_video, tmp_path):
     ])
     assert ret == 0
     r = json.loads((out / "report.json").read_text())
-    assert r["status"] == "ok"
+
+    # (c) Refuse to produce final report as status "ok" in mock mode: use status "mock"
+    assert r["status"] == "mock"
+    # (a) When --mock/--dry-run is used, put "mock": true in report.json
+    assert r["mock"] is True
+
     assert set(r["stage_seconds"]) == {"extract_frames", "reconstruct", "align_scene", "build_collision", "export_scene"}
     assert r["frames"]["kept"] > 0
     assert r["reconstruction"]["registration_rate"] == 1.0
     assert r["reconstruction"]["gaussian_count"] > 0
     assert (out / "debug" / "floor_alignment.png").exists()
     assert (out / "occupancy.png").exists()
+
+    # (a) "mock": true in timings.json and scene meta.json
+    timings = json.loads((out / "timings.json").read_text())
+    assert timings.get("mock") is True
+    meta = json.loads((out / "scene" / "meta.json").read_text())
+    assert meta.get("mock") is True
+    scene_info = json.loads((out / "scene_info.json").read_text())
+    assert scene_info.get("mock") is True
+
+    # (a) bold "MOCK RUN - NOT A REAL RECONSTRUCTION" line at the top of report.md
+    md = (out / "report.md").read_text()
+    assert md.startswith("**MOCK RUN - NOT A REAL RECONSTRUCTION**")
+
+    # (b) In mock mode do NOT copy anything into viewer/public/scene/; write to out/ only
+    vs = tmp_path / "vs"
+    assert not vs.exists() or len(list(vs.iterdir())) == 0
+
+def test_report_refuses_ok_status_in_mock_mode(tmp_path):
+    # Test refusal when mock=True argument is explicitly passed
+    r = build_report(tmp_path, "fast", 1.0, status="ok", mock=True)
+    assert r["status"] == "mock"
+    assert r["mock"] is True
+    md = render_md(r)
+    assert md.startswith("**MOCK RUN - NOT A REAL RECONSTRUCTION**")
+
+    # Test refusal when timings.json indicates a mock run
+    (tmp_path / "timings.json").write_text(json.dumps({"mock": True}))
+    r2 = build_report(tmp_path, "fast", 1.0, status="ok")
+    assert r2["status"] == "mock"
+    assert r2["mock"] is True
+
+    # Test refusal when meta.json indicates a mock run
+    (tmp_path / "scene").mkdir(exist_ok=True)
+    (tmp_path / "scene" / "meta.json").write_text(json.dumps({"mock": True}))
+    r3 = build_report(tmp_path, "fast", 1.0, status="ok")
+    assert r3["status"] == "mock"
+    assert r3["mock"] is True
+
+def test_mock_mode_does_not_copy_to_viewer_public_scene(synth_video, tmp_path):
+    out = tmp_path / "out_mock_default_dir"
+    # Create a dummy config without overriding viewer_scene_dir (defaults to viewer/public/scene)
+    cfg_file = tmp_path / "default_cfg.yaml"
+    cfg_file.write_text(open("pipeline/config.yaml").read())
+    ret = main([
+        "--video", str(synth_video),
+        "--out", str(out),
+        "--config", str(cfg_file),
+        "--mock",
+        "--frames", "10",
+    ])
+    assert ret == 0
+    # Output scene files exist in out/
+    assert (out / "scene" / "meta.json").exists()
+    assert (out / "scene" / "scene.splat").exists() or (out / "scene" / "scene.ply").exists()
+    # But export report confirms viewer copy was skipped in mock mode
+    exp_report = json.loads((out / "export_report.json").read_text())
+    assert exp_report.get("viewer_dir") is None
+    assert exp_report.get("mock") is True
 
 def test_missing_data_is_null_not_invented(tmp_path):
     r = build_report(tmp_path, "fast", 1.0)
