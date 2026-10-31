@@ -322,6 +322,11 @@ def reconstruct(cfg: dict, out: Path) -> dict:
         ]
         if not c.get("use_gpu", True):
             colmap_cmd.append("--no-gpu")
+        elif sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            # COLMAP's CUDA SIFT path may still require an OpenGL context, which
+            # is unavailable in headless Colab/CI/Linux sessions.
+            log.info("Headless Linux detected; selecting CPU SIFT to avoid COLMAP OpenGL context failure.")
+            colmap_cmd.append("--no-gpu")
         try:
             run_cmd(colmap_cmd, logs / "colmap.log",
                     "Check COLMAP installs (`colmap -h`). Try matcher=exhaustive in config.yaml, or capture per docs/SOP.md.")

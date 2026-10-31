@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 import cv2
 import numpy as np
 from utils import PipelineError, get_logger
@@ -22,6 +23,7 @@ class Cand:
     n: int
     sharp: float
     thumb: np.ndarray
+    cache_path: Path | None = None
 
 def sharpness(gray: np.ndarray) -> float:
     """Variance of the Laplacian; higher = sharper."""
@@ -35,7 +37,8 @@ def _resize(img: np.ndarray, max_side: int) -> np.ndarray:
     return img
 
 def sample_candidates(path: Path, vid: int, fps_target: float, max_side: int,
-                      trim_start_s: float = 0.0, trim_end_s: float = 0.0) -> list[Cand]:
+                      trim_start_s: float = 0.0, trim_end_s: float = 0.0,
+                      cache_dir: Path | None = None) -> list[Cand]:
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise PipelineError(f"Cannot open video {path}", "Check the file is a valid MP4/MOV and ffmpeg codecs are installed.")
@@ -63,7 +66,15 @@ def sample_candidates(path: Path, vid: int, fps_target: float, max_side: int,
         frame = _resize(frame, max_side)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         thumb = cv2.resize(gray, (64, 64), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
-        out.append(Cand(vid, t, curr_n, sharpness(gray), thumb))
+        cache_path = None
+        if cache_dir is not None:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_path = cache_dir / f"video_{vid:03d}_frame_{curr_n:08d}.jpg"
+            if not cv2.imwrite(str(cache_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+                cap.release()
+                raise PipelineError(f"Could not cache sampled frame {curr_n} from {path.name}.",
+                                    "Check that the output disk has free space and is writable.")
+        out.append(Cand(vid, t, curr_n, sharpness(gray), thumb, cache_path))
         if len(out) % 100 == 0 or idx % 600 == 0:
             pct = f" ({idx * 100 // total_frames}%)" if total_frames > 0 else ""
             log.info("  scanned frame %d%s: %d candidates at t=%.1fs...", idx, pct, len(out), t)
@@ -94,6 +105,16 @@ def save_selected(video: Path, chosen: list[Cand], out_dir: Path, max_side: int,
     """Second pass: re-open video and write only chosen frames to disk."""
     if not chosen:
         return 0
+    if all(c.cache_path is not None for c in chosen):
+        for pos, cand in enumerate(chosen):
+            target = out_dir / f"frame_{start_idx + pos:05d}.jpg"
+            if cand.cache_path is None or not cand.cache_path.is_file():
+                raise PipelineError(f"Cached sampled frame is missing for {video.name} at {cand.t:.2f}s.",
+                                    "Re-run frame extraction; the temporary frame cache may have been removed.")
+            shutil.copyfile(cand.cache_path, target)
+            if (pos + 1) % 50 == 0 or pos + 1 == len(chosen):
+                log.info("  wrote %d / %d frames...", pos + 1, len(chosen))
+        return len(chosen)
     cap = cv2.VideoCapture(str(video))
     if not cap.isOpened():
         raise PipelineError(f"Cannot open video {video}", "Check the file is a valid MP4/MOV and ffmpeg codecs are installed.")
@@ -135,13 +156,36 @@ def extract(cfg: dict, out: Path, videos: list[Path]) -> dict:
     fc = cfg["frames"]
     fdir = out / "frames"
     fdir.mkdir(parents=True, exist_ok=True)
+    cache_root = out / ".candidate_cache"
+    if cache_root.exists():
+        shutil.rmtree(cache_root)
+    cache_root.mkdir(parents=True, exist_ok=True)
     for old in fdir.glob("*.jpg"):
         old.unlink()
     trim_start = float(fc.get("trim_start_s", 0.0) or 0.0)
     trim_end = float(fc.get("trim_end_s", 0.0) or 0.0)
     per_video, stats = [], {"candidates": 0, "dropped_blur": 0, "dropped_duplicate": 0, "dropped_excess": 0}
     for i, v in enumerate(videos):
-        cands = sample_candidates(v, i, fc["candidate_fps"], fc["max_side"], trim_start, trim_end)
+        # Keep about twice the requested frame count, spread across the clip.
+        cap = cv2.VideoCapture(str(v))
+        duration = 0.0
+        if cap.isOpened():
+            fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+            count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0
+            duration = count / fps if fps > 0 else 0.0
+        cap.release()
+        if trim_end > 0:
+            duration = max(0.0, min(duration, trim_end) - trim_start)
+        elif trim_start > 0 and duration > 0:
+            duration = max(0.0, duration - trim_start)
+        per_video_target = max(1, int(np.ceil(fc["target_count"] / len(videos))))
+        target_fps = float(fc["candidate_fps"])
+        if duration > 0 and per_video_target > 0:
+            target_fps = min(target_fps, max(0.05, 2.0 * per_video_target / duration))
+        log.info("Sampling %s at up to %.3g fps (about %d candidates for %d target frames).",
+                 v.name, target_fps, 2 * per_video_target, per_video_target)
+        cands = sample_candidates(v, i, target_fps, fc["max_side"], trim_start, trim_end,
+                                  cache_root / f"video_{i:03d}")
         sharp_ok, thr = filter_blur(cands, fc["blur_percentile"], fc["min_blur_abs"])
         deduped = filter_duplicates(sharp_ok, fc["dup_threshold"])
         per_video.append((v, cands, sharp_ok, deduped, thr))
@@ -166,6 +210,7 @@ def extract(cfg: dict, out: Path, videos: list[Path]) -> dict:
     report = {"videos": [str(v) for v in videos], "kept": saved, **stats,
               "avg_sharpness": round(float(np.mean(sharp_vals)), 2), "target_count": fc["target_count"]}
     (out / "frames_report.json").write_text(json.dumps(report, indent=2))
+    shutil.rmtree(cache_root, ignore_errors=True)
     log.info("Frames kept: %d (target %d)", saved, fc["target_count"])
     if saved < 60:
         log.warning("Only %d frames kept; reconstruction usually needs 100+. Capture longer/slower (docs/SOP.md).", saved)

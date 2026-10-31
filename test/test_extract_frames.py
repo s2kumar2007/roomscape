@@ -58,6 +58,17 @@ def test_save_selected_fewer_frames_raises(synth_video, tmp_path):
     assert "expected" in str(exc_info.value).lower() or "fewer" in str(exc_info.value).lower()
     assert exc_info.value.fix
 
+def test_save_selected_uses_cached_frame_without_reopening_video(tmp_path):
+    from extract_frames import save_selected
+    cached = tmp_path / "candidate.jpg"
+    cached.write_bytes(b"cached-frame")
+    cand = Cand(video=0, t=1.0, n=30, sharp=100.0,
+                thumb=np.zeros((64, 64), dtype=np.float32), cache_path=cached)
+    out = tmp_path / "frames"
+    out.mkdir()
+    assert save_selected(tmp_path / "video-does-not-need-to-exist.mp4", [cand], out, 1920) == 1
+    assert (out / "frame_00000.jpg").read_bytes() == b"cached-frame"
+
 def test_trimming_limits_sampled_time_range(synth_video, tmp_path):
     cands_untrimmed = sample_candidates(synth_video, 0, 6, 1920, trim_start_s=0.0, trim_end_s=0.0)
     assert min(c.t for c in cands_untrimmed) < 0.5
