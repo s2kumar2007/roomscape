@@ -7,6 +7,9 @@ import { Minimap } from "./minimap";
 import { UI } from "./ui";
 import { loadPOIs, POILabelOverlay, type ValidatedPOI } from "./poi";
 import { SearchUI } from "./searchUI";
+import { AStarFinder } from "./astar";
+import { Navigator } from "./navigator";
+import { RouteRenderer } from "./routeRenderer";
 
 declare global { interface Window { roomscape?: Record<string, unknown>; __roomscapeReady?: boolean; __roomscapeStats?: { fps: number; pixelRatio: number; loadMs: number; gaussians: number } } }
 
@@ -46,14 +49,63 @@ async function main(): Promise<void> {
   reset = () => controls.reset();
   const minimap = new Minimap(document.getElementById("minimap") as HTMLCanvasElement, col);
 
+  // Navigation core and route rendering
+  const astar = new AStarFinder(col);
+  const navigator = new Navigator(astar, meta.walk_speed, meta.scale.approximate);
+  const routeRenderer = new RouteRenderer(
+    pathLayer,
+    minimap,
+    () => {
+      if (controls.isAutoWalking) {
+        controls.cancelAutoWalk();
+      } else {
+        const wps = navigator.getWaypoints();
+        if (wps.length > 0) {
+          controls.startAutoWalk(wps, () => {
+            navigator.update([controls.x, controls.z]);
+          });
+        }
+      }
+    },
+    () => {
+      controls.cancelAutoWalk();
+      navigator.cancel();
+      routeRenderer.clear();
+    }
+  );
+
+  const startNavigation = (poi: ValidatedPOI) => {
+    controls.cancelAutoWalk();
+    const ok = navigator.setGoal([controls.x, controls.z], poi.worldPos, poi.name);
+    if (!ok) {
+      ui.banner(`Cannot reach ${poi.name}`);
+    }
+  };
+
+  const onNavigate = (e: Event) => {
+    const poi = (e as CustomEvent<ValidatedPOI>).detail;
+    startNavigation(poi);
+  };
+  window.addEventListener("roomscape:navigate", onNavigate);
+
+  // Esc cancels navigation if active
+  const onEscKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && navigator.getStatus() !== "idle") {
+      controls.cancelAutoWalk();
+      navigator.cancel();
+      routeRenderer.clear();
+    }
+  };
+  window.addEventListener("keydown", onEscKey);
+
   // Load and validate POIs
   const { pois, ignoredCount } = await loadPOIs(loaded.base, meta, col);
   const poiOverlay = new POILabelOverlay();
   const searchUI = new SearchUI(pois, () => [controls.x, controls.z], (selected: ValidatedPOI) => {
-    window.dispatchEvent(new CustomEvent("roomscape:navigate", { detail: selected }));
+    startNavigation(selected);
   });
   poiOverlay.setPOIs(pois, (selected: ValidatedPOI) => {
-    window.dispatchEvent(new CustomEvent("roomscape:navigate", { detail: selected }));
+    startNavigation(selected);
   });
 
   // Render 3D marker pins onto poiLayer
@@ -72,7 +124,7 @@ async function main(): Promise<void> {
   } else if (meta.scale.approximate) {
     ui.banner("Scale is approximate (no marker detected)");
   }
-  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer, pois, poiOverlay, searchUI };
+  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer, pois, poiOverlay, searchUI, navigator, routeRenderer, astar };
 
   const onResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
   window.addEventListener("resize", onResize);
@@ -83,6 +135,8 @@ async function main(): Promise<void> {
     const now = performance.now(); const dt = Math.min(0.1, (now - last) / 1000); last = now;
     controls.update(dt); minimap.draw(controls.x, controls.z, controls.yaw);
     poiOverlay.update(camera, col, pois);
+    const navState = navigator.update([controls.x, controls.z]);
+    routeRenderer.update(navState, controls.isAutoWalking);
     renderer.render(scene, camera);
     acc += dt; frames++;
     if (acc >= 0.5) {
@@ -99,7 +153,10 @@ async function main(): Promise<void> {
   window.__roomscapeReady = true; ui.progress(1, "Ready"); ui.done();
 
   window.addEventListener("pagehide", () => {     // free GPU memory
-    renderer.setAnimationLoop(null); controls.dispose(); poiOverlay.dispose(); searchUI.dispose(); window.removeEventListener("resize", onResize);
+    renderer.setAnimationLoop(null); controls.dispose(); poiOverlay.dispose(); searchUI.dispose(); routeRenderer.dispose();
+    window.removeEventListener("resize", onResize);
+    window.removeEventListener("roomscape:navigate", onNavigate);
+    window.removeEventListener("keydown", onEscKey);
     pinGeo.dispose(); pinMat.dispose();
     scene.remove(mesh); mesh.dispose(); spark.dispose?.(); renderer.dispose();
   });

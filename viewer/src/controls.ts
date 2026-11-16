@@ -18,10 +18,18 @@ export class FirstPersonControls {
   private lookId: number | null = null; private lastLook = { x: 0, y: 0 };
   private disposers: (() => void)[] = [];
   private spawn = { x: 0, z: 0, yaw: 0 };
+
+  // "Walk me there" guided auto-walk state
+  isAutoWalking = false;
+  private autoWalkWaypoints: [number, number][] = [];
+  private autoWalkIndex = 0;
+  private onAutoWalkArrived?: () => void;
+
   constructor(private cam: THREE.PerspectiveCamera, private dom: HTMLElement, private col: CollisionMap,
               private opt: { eye: number; walk: number; run: number; accel?: number; sens?: number }) {
     const on = <K extends keyof WindowEventMap>(t: K, f: (e: WindowEventMap[K]) => void) => { window.addEventListener(t, f); this.disposers.push(() => window.removeEventListener(t, f)); };
     on("keydown", (e) => {
+      if (this.isAutoWalking) this.cancelAutoWalk();
       if (isInputFocused()) {
         this.keys.clear();
         return;
@@ -30,11 +38,37 @@ export class FirstPersonControls {
     });
     on("keyup", (e) => { this.keys.delete(e.code); });
     on("blur", () => this.keys.clear());
-    on("mousemove", (e) => { if (document.pointerLockElement === this.dom) this.look(e.movementX, e.movementY); });
+    on("mousemove", (e) => {
+      if (document.pointerLockElement === this.dom) {
+        if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) {
+          if (this.isAutoWalking) this.cancelAutoWalk();
+        }
+        this.look(e.movementX, e.movementY);
+      }
+    });
     const isCoarse = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
     const click = () => { if (!isCoarse) void this.dom.requestPointerLock?.(); };
     this.dom.addEventListener("click", click); this.disposers.push(() => this.dom.removeEventListener("click", click));
     if (isCoarse) this.setupTouch();
+  }
+
+  startAutoWalk(waypoints: [number, number][], onArrived?: () => void): void {
+    if (waypoints.length === 0) return;
+    this.isAutoWalking = true;
+    this.autoWalkWaypoints = waypoints.slice();
+    this.autoWalkIndex = 0;
+    this.onAutoWalkArrived = onArrived;
+    this.vx = 0;
+    this.vz = 0;
+    this.keys.clear();
+  }
+
+  cancelAutoWalk(): void {
+    if (!this.isAutoWalking) return;
+    this.isAutoWalking = false;
+    this.autoWalkWaypoints = [];
+    this.autoWalkIndex = 0;
+    this.onAutoWalkArrived = undefined;
   }
   setSpawn(x: number, z: number, yaw: number): void { this.spawn = { x, z, yaw }; this.reset(); }
   reset(): void { this.x = this.spawn.x; this.z = this.spawn.z; this.yaw = this.spawn.yaw; this.pitch = 0; this.vx = this.vz = 0; this.apply(); }
@@ -61,6 +95,47 @@ export class FirstPersonControls {
     this.disposers.push(() => joy.remove());
   }
   update(dt: number): void {
+    if (this.isAutoWalking && this.autoWalkWaypoints.length > 0) {
+      if (Math.hypot(this.joy.x, this.joy.y) > 0.1 || this.keys.size > 0) {
+        this.cancelAutoWalk();
+      } else {
+        const target = this.autoWalkWaypoints[this.autoWalkIndex];
+        const dx = target[0] - this.x;
+        const dz = target[1] - this.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist < 0.35) {
+          this.autoWalkIndex++;
+          if (this.autoWalkIndex >= this.autoWalkWaypoints.length) {
+            const cb = this.onAutoWalkArrived;
+            this.cancelAutoWalk();
+            cb?.();
+            this.apply();
+            return;
+          }
+        }
+
+        const nextTarget = this.autoWalkWaypoints[this.autoWalkIndex];
+        const tdx = nextTarget[0] - this.x;
+        const tdz = nextTarget[1] - this.z;
+        const desiredYaw = Math.atan2(-tdx, -tdz);
+        let dyaw = desiredYaw - this.yaw;
+        while (dyaw > Math.PI) dyaw -= 2 * Math.PI;
+        while (dyaw < -Math.PI) dyaw += 2 * Math.PI;
+        this.yaw += dyaw * Math.min(1.0, 5.0 * dt);
+
+        const speed = this.opt.walk;
+        const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
+        const mx = -sy * speed * dt;
+        const mz = -cy * speed * dt;
+        const [nx, nz] = this.col.move(this.x, this.z, mx, mz);
+        this.x = nx;
+        this.z = nz;
+        this.apply();
+        return;
+      }
+    }
+
     const k = this.keys;
     let fx = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0) - this.joy.y;
     let rx = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0) + this.joy.x;
