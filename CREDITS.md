@@ -8,10 +8,10 @@
 | OpenCV | Apache-2.0 (4.5+) | Frame extraction, sharpness scoring, marker detection |
 | NumPy | BSD-3-Clause | Numerics |
 | PyYAML | MIT | Config loading |
-| pytest | MIT | Tests |
+| pytest / pytest-cov | MIT / MIT | Tests and coverage analysis |
 | Three.js | MIT | 3D rendering in the viewer |
 | Spark (@sparkjsdev/spark) | MIT | Gaussian splat renderer for Three.js |
-| Vite / Vitest / TypeScript | MIT / MIT / Apache-2.0 | Viewer build, tests, typing |
+| Vite / Vitest / TypeScript / @vitest/coverage-v8 | MIT / MIT / Apache-2.0 / MIT | Viewer build, tests, typing, coverage |
 | Matplotlib | PSF-based (BSD-compatible) | Debug plots |
 | Playwright | Apache-2.0 | Viewer health check |
 | FFmpeg | LGPL/GPL (used as external CLI only) | Video codec support |

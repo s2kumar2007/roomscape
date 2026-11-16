@@ -1,4 +1,4 @@
-.PHONY: setup run viewer build test health
+.PHONY: setup run viewer build test health check
 setup:
 	bash scripts/setup_env.sh
 run:
@@ -11,3 +11,5 @@ test:
 	pytest -q && cd viewer && npm test
 health:
 	python scripts/health_check.py --url $(URL)
+check:
+	python scripts/check_all.py

@@ -5,4 +5,7 @@ __pycache__/
 .pytest_cache/
 viewer/node_modules/
 viewer/dist/
+viewer/coverage/
+coverage/
+.coverage
 *.ply
