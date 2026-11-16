@@ -1,3 +1,5 @@
+import { isInputFocused } from "./controls";
+
 /** DOM UI: loading screen, help (H or ?), FPS counter (F), fullscreen, reset, scale banner. */
 const $ = <T extends HTMLElement>(id: string): T | null =>
   typeof document !== "undefined" ? (document.getElementById(id) as T | null) : null;
@@ -9,6 +11,7 @@ export class UI {
   constructor(private onReset: () => void = () => {}) {
     if (typeof window !== "undefined") {
       window.addEventListener("keydown", (e) => {
+        if (isInputFocused()) return;
         if (e.key === "?" || e.key.toLowerCase() === "h" || e.code === "KeyH" || (e.code === "Slash" && e.shiftKey)) {
           e.preventDefault();
           this.toggleHelp();

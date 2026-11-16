@@ -6,6 +6,7 @@ import { loadScene } from "./loader";
 import { Minimap } from "./minimap";
 import { UI } from "./ui";
 import { loadPOIs, POILabelOverlay, type ValidatedPOI } from "./poi";
+import { SearchUI } from "./searchUI";
 
 declare global { interface Window { roomscape?: Record<string, unknown>; __roomscapeReady?: boolean; __roomscapeStats?: { fps: number; pixelRatio: number; loadMs: number; gaussians: number } } }
 
@@ -48,6 +49,9 @@ async function main(): Promise<void> {
   // Load and validate POIs
   const { pois, ignoredCount } = await loadPOIs(loaded.base, meta, col);
   const poiOverlay = new POILabelOverlay();
+  const searchUI = new SearchUI(pois, () => [controls.x, controls.z], (selected: ValidatedPOI) => {
+    window.dispatchEvent(new CustomEvent("roomscape:navigate", { detail: selected }));
+  });
   poiOverlay.setPOIs(pois, (selected: ValidatedPOI) => {
     window.dispatchEvent(new CustomEvent("roomscape:navigate", { detail: selected }));
   });
@@ -68,7 +72,7 @@ async function main(): Promise<void> {
   } else if (meta.scale.approximate) {
     ui.banner("Scale is approximate (no marker detected)");
   }
-  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer, pois, poiOverlay };
+  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer, pois, poiOverlay, searchUI };
 
   const onResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
   window.addEventListener("resize", onResize);
@@ -95,7 +99,7 @@ async function main(): Promise<void> {
   window.__roomscapeReady = true; ui.progress(1, "Ready"); ui.done();
 
   window.addEventListener("pagehide", () => {     // free GPU memory
-    renderer.setAnimationLoop(null); controls.dispose(); poiOverlay.dispose(); window.removeEventListener("resize", onResize);
+    renderer.setAnimationLoop(null); controls.dispose(); poiOverlay.dispose(); searchUI.dispose(); window.removeEventListener("resize", onResize);
     pinGeo.dispose(); pinMat.dispose();
     scene.remove(mesh); mesh.dispose(); spark.dispose?.(); renderer.dispose();
   });

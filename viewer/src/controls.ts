@@ -2,10 +2,18 @@
 import * as THREE from "three";
 import type { CollisionMap } from "./collision";
 
+export function isInputFocused(): boolean {
+  if (typeof document === "undefined") return false;
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName?.toLowerCase();
+  return tag === "input" || tag === "textarea" || (el as HTMLElement).isContentEditable;
+}
+
 export class FirstPersonControls {
   yaw = 0; pitch = 0; x = 0; z = 0;
   private vx = 0; private vz = 0;
-  private keys = new Set<string>();
+  keys = new Set<string>();
   private joy = { x: 0, y: 0 };
   private lookId: number | null = null; private lastLook = { x: 0, y: 0 };
   private disposers: (() => void)[] = [];
@@ -13,13 +21,20 @@ export class FirstPersonControls {
   constructor(private cam: THREE.PerspectiveCamera, private dom: HTMLElement, private col: CollisionMap,
               private opt: { eye: number; walk: number; run: number; accel?: number; sens?: number }) {
     const on = <K extends keyof WindowEventMap>(t: K, f: (e: WindowEventMap[K]) => void) => { window.addEventListener(t, f); this.disposers.push(() => window.removeEventListener(t, f)); };
-    on("keydown", (e) => { this.keys.add(e.code); });
+    on("keydown", (e) => {
+      if (isInputFocused()) {
+        this.keys.clear();
+        return;
+      }
+      this.keys.add(e.code);
+    });
     on("keyup", (e) => { this.keys.delete(e.code); });
     on("blur", () => this.keys.clear());
     on("mousemove", (e) => { if (document.pointerLockElement === this.dom) this.look(e.movementX, e.movementY); });
-    const click = () => { if (!matchMedia("(pointer: coarse)").matches) void this.dom.requestPointerLock?.(); };
+    const isCoarse = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    const click = () => { if (!isCoarse) void this.dom.requestPointerLock?.(); };
     this.dom.addEventListener("click", click); this.disposers.push(() => this.dom.removeEventListener("click", click));
-    if (matchMedia("(pointer: coarse)").matches) this.setupTouch();
+    if (isCoarse) this.setupTouch();
   }
   setSpawn(x: number, z: number, yaw: number): void { this.spawn = { x, z, yaw }; this.reset(); }
   reset(): void { this.x = this.spawn.x; this.z = this.spawn.z; this.yaw = this.spawn.yaw; this.pitch = 0; this.vx = this.vz = 0; this.apply(); }
