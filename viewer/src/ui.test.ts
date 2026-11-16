@@ -55,4 +55,13 @@ describe("UI banner", () => {
     expect(bannerElement.textContent).toBe("MOCK SCENE");
     expect(bannerElement.style.background).toBe("#d32f2f");
   });
+
+  it("displays persistent warning banner on WebGL context loss", () => {
+    const ui = new UI();
+    ui.banner("WebGL context lost. Attempting recovery...", true);
+
+    expect(bannerElement.textContent).toBe("WebGL context lost. Attempting recovery...");
+    expect(bannerElement.style.display).toBe("block");
+    expect(bannerElement.style.background).toBe("#d32f2f");
+  });
 });

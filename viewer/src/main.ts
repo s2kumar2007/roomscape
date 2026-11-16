@@ -29,6 +29,19 @@ async function main(): Promise<void> {
   let ratio = Math.min(maxRatio, 1.5);
   renderer.setPixelRatio(ratio); renderer.setSize(window.innerWidth, window.innerHeight);
   document.getElementById("app")!.appendChild(renderer.domElement);
+
+  // WebGL context recovery guard
+  renderer.domElement.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    renderer.setAnimationLoop(null);
+    ui.banner("WebGL context lost. Attempting recovery...", true);
+  });
+  renderer.domElement.addEventListener("webglcontextrestored", () => {
+    ui.banner("WebGL context restored. Reloading scene...");
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  });
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 200);
   const spark = new SparkRenderer({ renderer }); scene.add(spark);
