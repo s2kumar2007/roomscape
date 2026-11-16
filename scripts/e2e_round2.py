@@ -17,7 +17,9 @@ import argparse
 import json
 import math
 import os
+import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -208,18 +210,23 @@ def main() -> int:
     dist_index = VIEWER_DIR / "dist" / "index.html"
     if not dist_index.exists():
         print("-> Building viewer before E2E...")
-        subprocess.run(["npm", "run", "build"], cwd=str(VIEWER_DIR), shell=True, check=True)
+        build_args = ["npm", "run", "build"]
+        build_cmd = subprocess.list2cmdline(build_args) if sys.platform == "win32" else shlex.join(build_args)
+        subprocess.run(build_cmd, cwd=str(VIEWER_DIR), shell=True, check=True)
 
     port = find_free_port()
     print(f"-> Starting vite preview on port {port}...")
 
     npx_bin = shutil.which("npx") or "npx"
+    preview_args = [npx_bin, "vite", "preview", "--port", str(port), "--strictPort"]
+    preview_cmd = subprocess.list2cmdline(preview_args) if sys.platform == "win32" else shlex.join(preview_args)
     preview_proc = subprocess.Popen(
-        [npx_bin, "vite", "preview", "--port", str(port), "--strictPort"],
+        preview_cmd,
         cwd=str(VIEWER_DIR),
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        preexec_fn=os.setsid if sys.platform != "win32" else None,
     )
 
     # Wait for server to respond
@@ -252,7 +259,10 @@ def main() -> int:
             if sys.platform == "win32":
                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(preview_proc.pid)], capture_output=True)
             else:
-                preview_proc.terminate()
+                try:
+                    os.killpg(os.getpgid(preview_proc.pid), signal.SIGTERM)
+                except Exception:
+                    preview_proc.terminate()
         except Exception:
             pass
 

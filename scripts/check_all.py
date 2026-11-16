@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 import argparse
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -42,8 +43,14 @@ def run_step(
 ) -> tuple[bool, float, str, str]:
     t0 = time.time()
     try:
+        final_cmd = cmd
+        if shell and isinstance(cmd, list):
+            if sys.platform == "win32":
+                final_cmd = subprocess.list2cmdline(cmd)
+            else:
+                final_cmd = shlex.join(cmd)
         proc = subprocess.run(
-            cmd,
+            final_cmd,
             cwd=str(cwd),
             env=env,
             shell=shell,
