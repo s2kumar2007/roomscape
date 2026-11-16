@@ -203,10 +203,11 @@ export class POIEditor {
       return;
     }
 
-    const name = prompt("POI Name (e.g. Conference Table):");
+    const defaultName = `Point of Interest ${this.pois.length + 1}`;
+    const name = prompt("POI Name (e.g. Conference Table):", defaultName);
     if (!name || !name.trim()) return;
 
-    const category = prompt("Category (e.g. desk, door, seating, display, amenity):", "general") || "general";
+    const category = prompt("Category (e.g. desk, door, seating, display, amenity):", "desk") || "general";
     const aliasesRaw = prompt("Aliases (comma-separated, optional):", "") || "";
     const aliases = aliasesRaw
       .split(",")

@@ -30,7 +30,15 @@
 <div id="hud"><button id="btn-search" title="Search POIs (/)">🔍 Search</button><button id="btn-reset" title="Reset to entrance">Reset</button><button id="btn-full" title="Fullscreen">Fullscreen</button><button id="btn-help" title="Controls (H)">?</button></div>
 <div id="fps"></div><div id="banner"></div>
 <div id="hint">Click to look around · WASD move · / search · Shift run · H help</div>
-<div id="help"><b>Controls</b><br>Mouse: look (click to capture, Esc to release)<br>W A S D: move &nbsp; Shift: run<br>/: search POIs &nbsp; H: help &nbsp; F: FPS counter<br>R: reset to entrance &nbsp; Fullscreen button<br>Touch: left joystick moves, drag right side to look</div>
+<div id="help"><b>Controls & Navigation</b><br>
+Mouse: look (click to capture, Esc to release)<br>
+W A S D: move &nbsp; Shift: run<br>
+/: search POIs &nbsp; H: help &nbsp; F: FPS counter<br>
+Click any POI label or search result to navigate<br>
+Esc: cancel route / close search<br>
+R: reset to entrance &nbsp; Fullscreen button<br>
+Touch: left joystick moves, drag right side to look<br>
+<span style="opacity:0.7; font-size:11px;">Dev mode: add ?edit=1 to URL to author/export POIs</span></div>
 <div id="loading"><div>Loading 3D space…</div><div id="bar"><div id="fill"></div></div><div id="status">Starting</div><div id="error"></div></div>
 <script type="module" src="/src/main.ts"></script>
 </body>

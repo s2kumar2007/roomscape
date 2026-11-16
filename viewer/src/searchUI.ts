@@ -107,15 +107,20 @@ export class SearchUI {
     this.disposers.push(() => this.overlay?.remove());
 
     // Connect HUD search button if available
-    const hud = document.getElementById("hud");
-    if (hud && !document.getElementById("btn-search")) {
-      const btnSearch = document.createElement("button");
-      btnSearch.id = "btn-search";
-      btnSearch.title = "Search POIs (/)";
-      btnSearch.textContent = "Search (/)";
-      btnSearch.onclick = () => this.toggle();
-      hud.appendChild(btnSearch);
-      this.disposers.push(() => btnSearch.remove());
+    const existingBtn = document.getElementById("btn-search");
+    if (existingBtn) {
+      existingBtn.onclick = () => this.toggle();
+    } else {
+      const hud = document.getElementById("hud");
+      if (hud) {
+        const btnSearch = document.createElement("button");
+        btnSearch.id = "btn-search";
+        btnSearch.title = "Search POIs (/)";
+        btnSearch.textContent = "🔍 Search";
+        btnSearch.onclick = () => this.toggle();
+        hud.insertBefore(btnSearch, hud.firstChild);
+        this.disposers.push(() => btnSearch.remove());
+      }
     }
   }
 

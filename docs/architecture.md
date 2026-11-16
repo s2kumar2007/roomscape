@@ -32,6 +32,31 @@ Yaw convention: forward = (-sin yaw, 0, -cos yaw); yaw 0 looks along -Z.
 ## `transform.json`
 `matrix` (4x4 similarity applied to the trained splat), `rotation`, `scale` (metres per splat unit), `method` (`apriltag` | `camera_height_fallback`), `approximate`, `confidence` (0-1 heuristic from tag-side consistency, reprojection residual and view count; 0.3 for the fallback), `tag` details, `floor_inlier_ratio`, `camera_up_deviation_deg`, `bounds`.
 
+## `poi.json` (Round 2 Points of Interest)
+```json
+{
+  "version": 1,
+  "pois": [
+    {
+      "id": "entrance", "name": "Main Entrance", "category": "door",
+      "aliases": ["exit", "door"], "position": [0.0, 0.0],
+      "description": "Main entrance foyer", "icon": "door"
+    }
+  ]
+}
+```
+* **Validation & Snapping**: Loaded via `sceneBase()`. Must lie within `meta.bounds` and snaps to the nearest cell with `inflated == 1` within $1.0\text{ m}$. Invalid POIs degrade gracefully with an on-screen banner (`"N POIs ignored"`).
+* **Wall Occlusion**: DOM label overlay performs 2D raycasting against the raw `BLOCKED` grid. Labels behind walls are hidden so they do not show through obstacles.
+
+## Navigation & A* Core (Round 2)
+* **Python reference**: `pipeline/navigation.py`
+* **TypeScript runtime**: `viewer/src/astar.ts` (zero per-frame allocations, typed arrays, binary min-heap)
+* **Grid Topology**: 8-neighbour grid on `inflated == 1`. Orthogonal step $1.0 \times \text{cell}$, diagonal $\sqrt{2} \times \text{cell}$.
+* **Corner Cutting**: Strictly forbidden. Diagonal movement requires both adjacent orthogonal neighbours to be walkable.
+* **Line-of-Sight Smoothing**: Bresenham/DDA line-of-sight raycasting removes intermediate collinear and redundant waypoints while guaranteeing the path never crosses obstacles and is never longer than raw A*.
+* **State Machine (`viewer/src/navigator.ts`)**: `idle` -> `routing` -> `arrived`. Arrival radius $0.6\text{ m}$, dynamic ETA calculation, and automatic rerouting when user wanders $> 1.5\text{ m}$ off course.
+* **Visual Route Rendering**: 3D instanced discs rendered at $y = 0.05$ with `depthTest = false`, `renderOrder = 999`, and synced minimap polyline.
+
 ## Design decisions
 * **Gaussian splatting + a separate collision proxy.** Splats look photoreal but have no surface for collision; the proxy gives Rounds 2-3 (A*, AR) a cheap, exact navigation structure.
 * **Nerfstudio splatfacto (gsplat, Apache-2.0)** instead of the original Inria code (non-commercial licence).

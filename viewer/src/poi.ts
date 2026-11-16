@@ -288,6 +288,14 @@ export class POILabelOverlay {
         e.stopPropagation();
         onSelectPOI?.(poi);
       });
+      el.addEventListener("mouseenter", () => {
+        el.style.borderColor = "rgba(77, 163, 255, 0.9)";
+        el.style.background = "rgba(25, 35, 55, 0.95)";
+      });
+      el.addEventListener("mouseleave", () => {
+        el.style.borderColor = "rgba(77, 163, 255, 0.4)";
+        el.style.background = "rgba(16, 22, 34, 0.85)";
+      });
 
       this.container.appendChild(el);
       this.elements.set(poi.id, el);

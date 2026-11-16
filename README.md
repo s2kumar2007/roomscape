@@ -1,6 +1,6 @@
 # Roomscape
 
-Roomscape turns a phone walkthrough video into a metric-scaled 3D Gaussian-splat scene that can be explored in a browser.
+Roomscape turns a phone walkthrough video into a metric-scaled 3D Gaussian-splat scene that can be explored in a browser, complete with semantic Points of Interest (POI) and obstacle-aware A* navigation.
 
 ## Quick start
 
@@ -42,7 +42,7 @@ python pipeline/run_pipeline.py --video /path/to/clip.mp4 --out ./roomscape-outp
 
 Use `--mode quality` for a longer training run. Use `--resume` after an interruption; completed stages are skipped and reconstruction reuses available COLMAP/training outputs. Use `--frames N`, `--trim-start SEC`, and `--trim-end SEC` to adjust extraction, or `--no-gpu` to disable GPU use by COLMAP (Nerfstudio training still needs CUDA). The command writes `report.json` and `report.md` in the output folder. Failures include the stage, exception traceback, captured process output, and a suggested fix.
 
-## Viewer
+## Viewer & Round 2 Features
 
 ```bash
 cd viewer
@@ -50,6 +50,26 @@ npm ci
 npm run dev
 ```
 
-Open the local Vite URL. Click the scene to capture the mouse; use WASD and the mouse to move/look, Shift to sprint, H or `?` for help, R or **Reset** to return to spawn, and F to toggle FPS. The minimap displays the collision grid. Build a static viewer with `npm run build`.
+Open the local Vite URL.
+- **Navigation & Controls**: Click to capture mouse; WASD to move, Shift to sprint, mouse to look around.
+- **POI Search**: Press `/` (or click 🔍 Search in the HUD) to fuzzy-search points of interest. Select a result to compute an obstacle-avoiding A* route.
+- **Route Guidance**: 3D floor trail and minimap polyline guide the player to their destination, displaying remaining distance and ETA.
+- **Auto-Walk**: Click **"🚶 Walk me there"** in the navigation HUD to traverse automatically with collision sliding.
+- **Dev Authoring Mode**: Append `?edit=1` to the viewer URL. Aim the crosshair at the floor (green = walkable), press **E** to add a POI, and click **Export poi.json** to download client-side.
+- **Controls & Help**: Press `H` or `?` for the controls overlay, `F` for FPS, `R` to reset to spawn, and `Esc` to cancel routes or close search.
+
+See [docs/ROUND2.md](docs/ROUND2.md) for detailed technical specifications and [docs/video_script_round2.md](docs/video_script_round2.md) for the demonstration walkthrough.
+
+## Verification & Automated Testing
+
+Round 2 is fully testable on standard CPU machines without GPU/CUDA dependencies.
+
+```bash
+# Run the complete test suite (pytest -> vitest -> tsc -> build -> Playwright E2E)
+python scripts/check_all.py
+
+# Submission pre-flight guard check
+python scripts/check_submission.py
+```
 
 See [docs/DEPLOY.md](docs/DEPLOY.md) for hosting and scene URL configuration. See [CREDITS.md](CREDITS.md) for third-party licenses and [LICENSE](LICENSE) for this repository's license.
