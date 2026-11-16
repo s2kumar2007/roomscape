@@ -10,6 +10,7 @@ import { SearchUI } from "./searchUI";
 import { AStarFinder } from "./astar";
 import { Navigator } from "./navigator";
 import { RouteRenderer } from "./routeRenderer";
+import { POIEditor } from "./poiEditor";
 
 declare global { interface Window { roomscape?: Record<string, unknown>; __roomscapeReady?: boolean; __roomscapeStats?: { fps: number; pixelRatio: number; loadMs: number; gaussians: number } } }
 
@@ -111,11 +112,24 @@ async function main(): Promise<void> {
   // Render 3D marker pins onto poiLayer
   const pinGeo = new THREE.CylinderGeometry(0.04, 0.01, 0.25, 8);
   const pinMat = new THREE.MeshBasicMaterial({ color: 0x4da3ff, depthTest: true });
-  for (const poi of pois) {
-    const pin = new THREE.Mesh(pinGeo, pinMat);
-    pin.position.set(poi.worldPos[0], 0.125, poi.worldPos[1]);
-    poiLayer.add(pin);
-  }
+  const refreshPins = (currentPOIs: ValidatedPOI[]) => {
+    while (poiLayer.children.length > 0) {
+      poiLayer.remove(poiLayer.children[0]);
+    }
+    for (const poi of currentPOIs) {
+      const pin = new THREE.Mesh(pinGeo, pinMat);
+      pin.position.set(poi.worldPos[0], 0.125, poi.worldPos[1]);
+      poiLayer.add(pin);
+    }
+  };
+  refreshPins(pois);
+
+  // Dev authoring mode (?edit=1)
+  const poiEditor = new POIEditor(scene, camera, col, meta, pois, (updated) => {
+    refreshPins(updated);
+    poiOverlay.setPOIs(updated, (selected) => startNavigation(selected));
+    searchUI.setPOIs(updated);
+  });
 
   if (meta.mock) {
     ui.banner("MOCK SCENE", true);
@@ -124,7 +138,7 @@ async function main(): Promise<void> {
   } else if (meta.scale.approximate) {
     ui.banner("Scale is approximate (no marker detected)");
   }
-  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer, pois, poiOverlay, searchUI, navigator, routeRenderer, astar };
+  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer, pois, poiOverlay, searchUI, navigator, routeRenderer, astar, poiEditor };
 
   const onResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
   window.addEventListener("resize", onResize);
@@ -135,6 +149,7 @@ async function main(): Promise<void> {
     const now = performance.now(); const dt = Math.min(0.1, (now - last) / 1000); last = now;
     controls.update(dt); minimap.draw(controls.x, controls.z, controls.yaw);
     poiOverlay.update(camera, col, pois);
+    poiEditor.update();
     const navState = navigator.update([controls.x, controls.z]);
     routeRenderer.update(navState, controls.isAutoWalking);
     renderer.render(scene, camera);
@@ -153,7 +168,7 @@ async function main(): Promise<void> {
   window.__roomscapeReady = true; ui.progress(1, "Ready"); ui.done();
 
   window.addEventListener("pagehide", () => {     // free GPU memory
-    renderer.setAnimationLoop(null); controls.dispose(); poiOverlay.dispose(); searchUI.dispose(); routeRenderer.dispose();
+    renderer.setAnimationLoop(null); controls.dispose(); poiOverlay.dispose(); searchUI.dispose(); routeRenderer.dispose(); poiEditor.dispose();
     window.removeEventListener("resize", onResize);
     window.removeEventListener("roomscape:navigate", onNavigate);
     window.removeEventListener("keydown", onEscKey);
