@@ -1,0 +1,351 @@
+{
+  "cases": [
+    {
+      "id": "zero_distance",
+      "start": [
+        3.9125,
+        -7.75
+      ],
+      "goal": [
+        3.9125,
+        -7.75
+      ],
+      "expected_cost": 0.0,
+      "expected_cells": 1
+    },
+    {
+      "id": "adjacent_ortho",
+      "start": [
+        3.7125,
+        -7.65
+      ],
+      "goal": [
+        3.8125,
+        -7.65
+      ],
+      "expected_cost": 1.0,
+      "expected_cells": 2
+    },
+    {
+      "id": "adjacent_diag",
+      "start": [
+        3.7125,
+        -7.65
+      ],
+      "goal": [
+        3.8125,
+        -7.55
+      ],
+      "expected_cost": 1.414214,
+      "expected_cells": 2
+    },
+    {
+      "id": "random_pair_3",
+      "start": [
+        1.0125,
+        -3.35
+      ],
+      "goal": [
+        3.4125,
+        -6.35
+      ],
+      "expected_cost": 46.384776,
+      "expected_cells": 42,
+      "expected_length": 4.4571
+    },
+    {
+      "id": "random_pair_4",
+      "start": [
+        4.2125,
+        -7.15
+      ],
+      "goal": [
+        1.3125,
+        -5.45
+      ],
+      "expected_cost": 36.041631,
+      "expected_cells": 30,
+      "expected_length": 3.3615
+    },
+    {
+      "id": "random_pair_5",
+      "start": [
+        4.2125,
+        -5.65
+      ],
+      "goal": [
+        3.7125,
+        -5.75
+      ],
+      "expected_cost": 5.414214,
+      "expected_cells": 6,
+      "expected_length": 0.5099
+    },
+    {
+      "id": "random_pair_6",
+      "start": [
+        2.2125,
+        -6.15
+      ],
+      "goal": [
+        4.6125,
+        -6.45
+      ],
+      "expected_cost": 25.242641,
+      "expected_cells": 25,
+      "expected_length": 2.4187
+    },
+    {
+      "id": "random_pair_7",
+      "start": [
+        1.1125,
+        -3.05
+      ],
+      "goal": [
+        1.5125,
+        -3.95
+      ],
+      "expected_cost": 10.656854,
+      "expected_cells": 10,
+      "expected_length": 0.9849
+    },
+    {
+      "id": "random_pair_8",
+      "start": [
+        4.4125,
+        -6.55
+      ],
+      "goal": [
+        0.3125,
+        -3.65
+      ],
+      "expected_cost": 57.112698,
+      "expected_cells": 49,
+      "expected_length": 5.3216
+    },
+    {
+      "id": "random_pair_9",
+      "start": [
+        5.3125,
+        -4.75
+      ],
+      "goal": [
+        4.0125,
+        -7.05
+      ],
+      "expected_cost": 28.384776,
+      "expected_cells": 24,
+      "expected_length": 2.642
+    },
+    {
+      "id": "random_pair_10",
+      "start": [
+        3.6125,
+        -7.05
+      ],
+      "goal": [
+        2.8125,
+        -6.45
+      ],
+      "expected_cost": 10.485281,
+      "expected_cells": 9,
+      "expected_length": 1.0
+    },
+    {
+      "id": "random_pair_11",
+      "start": [
+        2.2125,
+        -5.75
+      ],
+      "goal": [
+        1.0125,
+        -5.65
+      ],
+      "expected_cost": 12.414214,
+      "expected_cells": 13,
+      "expected_length": 1.2042
+    },
+    {
+      "id": "random_pair_12",
+      "start": [
+        0.0125,
+        -4.15
+      ],
+      "goal": [
+        2.6125,
+        -3.65
+      ],
+      "expected_cost": 28.071068,
+      "expected_cells": 27,
+      "expected_length": 2.6476
+    },
+    {
+      "id": "random_pair_13",
+      "start": [
+        2.9125,
+        -7.05
+      ],
+      "goal": [
+        1.4125,
+        -3.85
+      ],
+      "expected_cost": 41.526912,
+      "expected_cells": 33,
+      "expected_length": 4.0382
+    },
+    {
+      "id": "random_pair_14",
+      "start": [
+        2.6125,
+        -5.85
+      ],
+      "goal": [
+        1.1125,
+        -2.55
+      ],
+      "expected_cost": 46.142136,
+      "expected_cells": 43,
+      "expected_length": 4.4565
+    },
+    {
+      "id": "random_pair_15",
+      "start": [
+        3.1125,
+        -3.35
+      ],
+      "goal": [
+        2.3125,
+        -2.85
+      ],
+      "expected_cost": 10.071068,
+      "expected_cells": 9,
+      "expected_length": 0.9434
+    },
+    {
+      "id": "random_pair_16",
+      "start": [
+        1.5125,
+        -3.95
+      ],
+      "goal": [
+        4.8125,
+        -4.75
+      ],
+      "expected_cost": 37.970563,
+      "expected_cells": 34,
+      "expected_length": 3.5297
+    },
+    {
+      "id": "random_pair_17",
+      "start": [
+        3.1125,
+        -5.75
+      ],
+      "goal": [
+        3.8125,
+        -4.55
+      ],
+      "expected_cost": 14.899495,
+      "expected_cells": 13,
+      "expected_length": 1.3892
+    },
+    {
+      "id": "random_pair_18",
+      "start": [
+        3.6125,
+        -3.75
+      ],
+      "goal": [
+        2.9125,
+        -5.45
+      ],
+      "expected_cost": 20.485281,
+      "expected_cells": 19,
+      "expected_length": 1.9318
+    },
+    {
+      "id": "random_pair_19",
+      "start": [
+        3.8125,
+        -7.45
+      ],
+      "goal": [
+        2.6125,
+        -6.05
+      ],
+      "expected_cost": 18.970563,
+      "expected_cells": 15,
+      "expected_length": 1.8439
+    },
+    {
+      "id": "random_pair_20",
+      "start": [
+        1.6125,
+        -2.85
+      ],
+      "goal": [
+        -0.2875,
+        -4.65
+      ],
+      "expected_cost": 26.455844,
+      "expected_cells": 20,
+      "expected_length": 2.6173
+    },
+    {
+      "id": "random_pair_21",
+      "start": [
+        3.8125,
+        -5.15
+      ],
+      "goal": [
+        2.9125,
+        -5.45
+      ],
+      "expected_cost": 10.242641,
+      "expected_cells": 10,
+      "expected_length": 0.9487
+    },
+    {
+      "id": "random_pair_22",
+      "start": [
+        1.8125,
+        -6.05
+      ],
+      "goal": [
+        1.5125,
+        -5.75
+      ],
+      "expected_cost": 4.242641,
+      "expected_cells": 4,
+      "expected_length": 0.4243
+    },
+    {
+      "id": "random_pair_23",
+      "start": [
+        1.3125,
+        -5.15
+      ],
+      "goal": [
+        4.6125,
+        -6.45
+      ],
+      "expected_cost": 38.970563,
+      "expected_cells": 35,
+      "expected_length": 3.6534
+    },
+    {
+      "id": "random_pair_24",
+      "start": [
+        2.6125,
+        -6.45
+      ],
+      "goal": [
+        4.2125,
+        -4.95
+      ],
+      "expected_cost": 22.213203,
+      "expected_cells": 17,
+      "expected_length": 2.1932
+    }
+  ]
+}
