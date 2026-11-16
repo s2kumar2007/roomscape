@@ -5,6 +5,7 @@ import { FirstPersonControls } from "./controls";
 import { loadScene } from "./loader";
 import { Minimap } from "./minimap";
 import { UI } from "./ui";
+import { loadPOIs, POILabelOverlay, type ValidatedPOI } from "./poi";
 
 declare global { interface Window { roomscape?: Record<string, unknown>; __roomscapeReady?: boolean; __roomscapeStats?: { fps: number; pixelRatio: number; loadMs: number; gaussians: number } } }
 
@@ -43,12 +44,31 @@ async function main(): Promise<void> {
   controls.setSpawn(meta.spawn.position[0], meta.spawn.position[2], meta.spawn.yaw);
   reset = () => controls.reset();
   const minimap = new Minimap(document.getElementById("minimap") as HTMLCanvasElement, col);
+
+  // Load and validate POIs
+  const { pois, ignoredCount } = await loadPOIs(loaded.base, meta, col);
+  const poiOverlay = new POILabelOverlay();
+  poiOverlay.setPOIs(pois, (selected: ValidatedPOI) => {
+    window.dispatchEvent(new CustomEvent("roomscape:navigate", { detail: selected }));
+  });
+
+  // Render 3D marker pins onto poiLayer
+  const pinGeo = new THREE.CylinderGeometry(0.04, 0.01, 0.25, 8);
+  const pinMat = new THREE.MeshBasicMaterial({ color: 0x4da3ff, depthTest: true });
+  for (const poi of pois) {
+    const pin = new THREE.Mesh(pinGeo, pinMat);
+    pin.position.set(poi.worldPos[0], 0.125, poi.worldPos[1]);
+    poiLayer.add(pin);
+  }
+
   if (meta.mock) {
     ui.banner("MOCK SCENE", true);
+  } else if (ignoredCount > 0) {
+    ui.banner(`${ignoredCount} POIs ignored`);
   } else if (meta.scale.approximate) {
     ui.banner("Scale is approximate (no marker detected)");
   }
-  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer };
+  window.roomscape = { scene, camera, poiLayer, pathLayer, collision: col, meta, controls, minimap, mesh, renderer, pois, poiOverlay };
 
   const onResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
   window.addEventListener("resize", onResize);
@@ -58,6 +78,7 @@ async function main(): Promise<void> {
   renderer.setAnimationLoop(() => {
     const now = performance.now(); const dt = Math.min(0.1, (now - last) / 1000); last = now;
     controls.update(dt); minimap.draw(controls.x, controls.z, controls.yaw);
+    poiOverlay.update(camera, col, pois);
     renderer.render(scene, camera);
     acc += dt; frames++;
     if (acc >= 0.5) {
@@ -74,7 +95,8 @@ async function main(): Promise<void> {
   window.__roomscapeReady = true; ui.progress(1, "Ready"); ui.done();
 
   window.addEventListener("pagehide", () => {     // free GPU memory
-    renderer.setAnimationLoop(null); controls.dispose(); window.removeEventListener("resize", onResize);
+    renderer.setAnimationLoop(null); controls.dispose(); poiOverlay.dispose(); window.removeEventListener("resize", onResize);
+    pinGeo.dispose(); pinMat.dispose();
     scene.remove(mesh); mesh.dispose(); spark.dispose?.(); renderer.dispose();
   });
 }

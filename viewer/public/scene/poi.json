@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "description": "Demonstration POI dataset for Roomscape digital twin viewer (Demo scene)",
+  "pois": [
+    {
+      "id": "entrance",
+      "name": "Main Entrance",
+      "category": "door",
+      "aliases": ["exit", "door", "foyer", "spawn"],
+      "position": [0.65, -4.25],
+      "description": "Main entry / spawn area (Demo scene POI)",
+      "icon": "door"
+    },
+    {
+      "id": "desk",
+      "name": "Workstation Desk",
+      "category": "desk",
+      "aliases": ["table", "computer", "workspace"],
+      "position": [1.50, -3.50],
+      "description": "Office workstation desk (Demo scene POI)",
+      "icon": "desk"
+    },
+    {
+      "id": "whiteboard",
+      "name": "Collaboration Board",
+      "category": "display",
+      "aliases": ["whiteboard", "screen", "board"],
+      "position": [2.50, -4.00],
+      "description": "Meeting and ideation whiteboard (Demo scene POI)",
+      "icon": "display"
+    },
+    {
+      "id": "lounge",
+      "name": "Lounge Seating",
+      "category": "seating",
+      "aliases": ["couch", "sofa", "chairs"],
+      "position": [3.50, -4.50],
+      "description": "Relaxation and casual discussion lounge (Demo scene POI)",
+      "icon": "chair"
+    },
+    {
+      "id": "coffee",
+      "name": "Coffee Corner",
+      "category": "amenity",
+      "aliases": ["kitchen", "pantry", "tea", "coffee"],
+      "position": [4.50, -5.15],
+      "description": "Refreshment station (Demo scene POI)",
+      "icon": "coffee"
+    },
+    {
+      "id": "window",
+      "name": "Window Overlook",
+      "category": "view",
+      "aliases": ["window", "terrace", "balcony"],
+      "position": [1.20, -5.45],
+      "description": "Natural lighting window wall (Demo scene POI)",
+      "icon": "sun"
+    }
+  ]
+}

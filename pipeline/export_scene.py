@@ -126,7 +126,11 @@ def export(cfg: dict, out: Path, fmt: str | None = None) -> dict:
         dest.mkdir(parents=True, exist_ok=True)
         for old in dest.glob("scene.*"): old.unlink()
         (dest / "SYNTHETIC_DEMO.txt").unlink(missing_ok=True)   # a real export replaces the synthetic demo scene
-        for x in scene.iterdir(): shutil.copy(x, dest / x.name)
+        for x in scene.iterdir():
+            # NEVER delete or overwrite user-authored poi.json
+            if x.name == "poi.json" and (dest / "poi.json").exists():
+                continue
+            shutil.copy(x, dest / x.name)
     else:
         log.info("[MOCK] Mock run: skipped copy to viewer directory (%s)", dest)
     rep = {"format": ext, "gaussians_before": n0, "gaussians_after": meta["gaussian_count"], "size_mb_before_ply": round((out / "aligned.ply").stat().st_size / 1e6, 2),
