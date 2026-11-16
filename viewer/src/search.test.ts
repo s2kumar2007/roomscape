@@ -124,4 +124,9 @@ describe("Search Pure Functions and Ranking", () => {
       expect(all[i].distance).toBeGreaterThanOrEqual(all[i - 1].distance);
     }
   });
+
+  it("verifies search result tier mapping", () => {
+    const tier = matchPOI("desk", samplePOIs[1]);
+    expect(tier).toBe("token");
+  });
 });

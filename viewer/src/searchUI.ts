@@ -43,6 +43,8 @@ export class SearchUI {
   private createDOM(): void {
     this.overlay = document.createElement("div");
     this.overlay.id = "search-overlay";
+    this.overlay.setAttribute("role", "dialog");
+    this.overlay.setAttribute("aria-label", "Point of Interest Search");
     this.overlay.style.position = "fixed";
     this.overlay.style.top = "60px";
     this.overlay.style.left = "50%";
@@ -71,6 +73,10 @@ export class SearchUI {
     this.input = document.createElement("input");
     this.input.id = "search-input";
     this.input.type = "text";
+    this.input.setAttribute("role", "combobox");
+    this.input.setAttribute("aria-expanded", "false");
+    this.input.setAttribute("aria-autocomplete", "list");
+    this.input.setAttribute("aria-controls", "search-results");
     this.input.placeholder = "Search points of interest... (Esc to close)";
     this.input.style.flex = "1";
     this.input.style.background = "#1b2028";
@@ -84,6 +90,7 @@ export class SearchUI {
 
     const closeBtn = document.createElement("button");
     closeBtn.textContent = "✕";
+    closeBtn.setAttribute("aria-label", "Close search");
     closeBtn.style.background = "transparent";
     closeBtn.style.border = "none";
     closeBtn.style.color = "#888";
@@ -96,12 +103,26 @@ export class SearchUI {
 
     this.resultsList = document.createElement("div");
     this.resultsList.id = "search-results";
+    this.resultsList.setAttribute("role", "listbox");
     this.resultsList.style.maxHeight = "280px";
     this.resultsList.style.overflowY = "auto";
     this.resultsList.style.display = "flex";
     this.resultsList.style.flexDirection = "column";
     this.resultsList.style.gap = "4px";
     this.overlay.appendChild(this.resultsList);
+
+    const footer = document.createElement("div");
+    footer.id = "search-footer";
+    footer.style.display = "flex";
+    footer.style.justifyContent = "space-between";
+    footer.style.alignItems = "center";
+    footer.style.marginTop = "8px";
+    footer.style.paddingTop = "8px";
+    footer.style.borderTop = "1px solid #232a35";
+    footer.style.fontSize = "11px";
+    footer.style.color = "#7e8b9b";
+    footer.innerHTML = `<span><b>↑ / ↓</b> Navigate</span> <span><b>Enter</b> Select</span> <span><b>Esc</b> Close</span>`;
+    this.overlay.appendChild(footer);
 
     document.body.appendChild(this.overlay);
     this.disposers.push(() => this.overlay?.remove());
@@ -183,6 +204,7 @@ export class SearchUI {
     }
 
     this.overlay.style.display = "block";
+    this.input.setAttribute("aria-expanded", "true");
     this.input.value = "";
     this.selectedIndex = 0;
     this.renderResults();
@@ -193,6 +215,7 @@ export class SearchUI {
     if (!this.overlay) return;
     this.overlay.style.display = "none";
     if (this.input) {
+      this.input.setAttribute("aria-expanded", "false");
       this.input.blur();
     }
   }
@@ -241,6 +264,8 @@ export class SearchUI {
     this.currentResults.forEach((res, idx) => {
       const row = document.createElement("div");
       row.className = "search-item";
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", idx === this.selectedIndex ? "true" : "false");
       row.style.display = "flex";
       row.style.alignItems = "center";
       row.style.justifyContent = "space-between";
@@ -306,7 +331,9 @@ export class SearchUI {
     const items = this.resultsList.children;
     for (let i = 0; i < items.length; i++) {
       const el = items[i] as HTMLElement;
-      if (i === this.selectedIndex) {
+      const isSelected = i === this.selectedIndex;
+      el.setAttribute("aria-selected", isSelected ? "true" : "false");
+      if (isSelected) {
         el.style.background = "#1f3a5f";
         el.style.borderColor = "#4da3ff";
       } else {
